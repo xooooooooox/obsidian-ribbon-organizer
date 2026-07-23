@@ -1,22 +1,84 @@
-import { App, ButtonComponent, ExtraButtonComponent, PluginSettingTab, Setting } from "obsidian";
+import { App, ButtonComponent, ExtraButtonComponent, PluginSettingTab, setIcon } from "obsidian";
+import type { SettingDefinitionItem } from "obsidian";
 import { isSeparator } from "../core/types";
 import { CommandSelectModal } from "./CommandSelectModal";
+import { GroupsSection } from "./GroupsSection";
 import { IconSelectModal } from "./IconSelectModal";
 import { renderIcon } from "./iconRender";
 import type RibbonOrganizerPlugin from "../main";
 
+type PanelTab = "groups" | "commands";
+
+const TABS: { id: PanelTab; label: string; icon: string }[] = [
+  { id: "groups", label: "Ribbon groups", icon: "rows-3" },
+  { id: "commands", label: "Quick commands", icon: "menu" },
+];
+
 export class RibbonOrganizerSettingTab extends PluginSettingTab {
+  private groupsSection: GroupsSection;
+  private activeTab: PanelTab = "groups";
+  private tabbedEl: HTMLElement | null = null;
+
   constructor(app: App, private plugin: RibbonOrganizerPlugin) {
     super(app, plugin);
+    this.groupsSection = new GroupsSection(app, plugin);
   }
 
+  // Declarative shell (Obsidian 1.13+): one render-type definition whose name/desc/aliases
+  // feed the settings search index; its row element is taken over by the tabbed panel, whose
+  // custom interactive sections the declarative control/list types cannot express. On 1.13+
+  // display() below is never called (definitions win); older versions use it instead.
+  getSettingDefinitions(): SettingDefinitionItem[] {
+    return [
+      {
+        name: "Ribbon Organizer",
+        desc: "Ribbon groups and quick commands.",
+        aliases: ["ribbon groups", "quick commands", "divider", "separator", "reorder", "menu"],
+        render: (setting) => {
+          setting.settingEl.empty();
+          setting.settingEl.addClass("ribbon-organizer-section");
+          this.activeTab = "groups";
+          this.renderTabbed(setting.settingEl);
+        },
+      },
+    ];
+  }
+
+  // Fallback for Obsidian < 1.13.0 (minAppVersion is 1.8.7), per the official guidance:
+  // "Only implement display() as a fallback for plugins that need to support Obsidian
+  // versions older than 1.13.0." Renders the same tabbed panel.
   display(): void {
-    const { containerEl } = this;
+    this.activeTab = "groups";
+    this.renderTabbed(this.containerEl);
+  }
+
+  // Two tabs (same pattern as config-sync's settings panel): icon+label buttons with an
+  // accent underline on the active one; switching re-renders the body in place.
+  private renderTabbed(containerEl: HTMLElement): void {
+    this.tabbedEl = containerEl;
     containerEl.empty();
-    new Setting(containerEl)
-      .setName("Quick commands")
-      .setDesc("Commands shown in the Ribbon Organizer menu. A command not installed on this device is greyed out.")
-      .setHeading();
+    const nav = containerEl.createDiv({ cls: "ribbon-organizer-tabs" });
+    for (const tab of TABS) {
+      const el = nav.createEl("button", { cls: "ribbon-organizer-tab" });
+      setIcon(el.createSpan({ cls: "ribbon-organizer-tab-icon" }), tab.icon);
+      el.createSpan({ text: tab.label });
+      if (tab.id === this.activeTab) el.addClass("is-active");
+      el.addEventListener("click", () => {
+        this.activeTab = tab.id;
+        if (this.tabbedEl !== null) this.renderTabbed(this.tabbedEl);
+      });
+    }
+    const body = containerEl.createDiv();
+    if (this.activeTab === "groups") this.groupsSection.render(body);
+    else this.renderQuickCommands(body);
+  }
+
+  private renderQuickCommands(containerEl: HTMLElement): void {
+    containerEl.empty();
+    containerEl.createDiv({
+      cls: "ribbon-organizer-tab-desc",
+      text: "Commands shown in the Ribbon Organizer menu. A command not installed on this device is greyed out.",
+    });
 
     const registry = (this.app as unknown as { commands: { commands: Record<string, { icon?: string }> } }).commands.commands;
     const list = this.plugin.settings.quickCommands;
@@ -25,9 +87,7 @@ export class RibbonOrganizerSettingTab extends PluginSettingTab {
     const persist = (): void => {
       void (async () => {
         await this.plugin.saveSettings();
-        const scroll = containerEl.scrollTop;
-        this.display();
-        containerEl.scrollTop = scroll;
+        this.renderQuickCommands(containerEl); // section re-renders in place; outer scroller untouched
       })();
     };
     const move = (idx: number, delta: number): void => {

@@ -32,24 +32,36 @@ export default defineConfig(
 	...obsidianmd.configs.recommended,
 	{
 		// "Ribbon Organizer" is the plugin's proper-noun name; the sentence-case rule's
-		// `brands` option preserves brand casing instead of flagging it. enforceCamelCaseLower
-		// mirrors the recommended preset's default so no other sentence-case behavior changes.
+		// `brands` option preserves brand casing instead of flagging it. Since `brands`
+		// replaces rather than merges the rule's own default list, "Obsidian" is repeated
+		// here too so it keeps its default exemption. enforceCamelCaseLower mirrors the
+		// recommended preset's default so no other sentence-case behavior changes.
 		rules: {
-			'obsidianmd/ui/sentence-case': ['warn', { brands: ['Ribbon Organizer'], enforceCamelCaseLower: true }],
+			'obsidianmd/ui/sentence-case': ['warn', { brands: ['Ribbon Organizer', 'Obsidian'], enforceCamelCaseLower: true }],
 		},
 	},
 	{
-		// SettingTab renders a custom interactive reorderable list (move/remove rows,
-		// inline command/icon pickers) that the declarative getSettingDefinitions API cannot
-		// express, so display() is the correct approach here. That override necessarily calls
-		// the inherited display() (deprecated since Obsidian 1.13, replaced by
-		// getSettingDefinitions); this plugin's minAppVersion is 1.8.7, so the deprecated path
-		// is unavoidable. eslint-comments/no-restricted-disable forbids an inline disable for
-		// either rule, so both are scoped off for this file instead.
+		// The tab implements getSettingDefinitions() (1.13+ declarative path, satisfies
+		// prefer-setting-definitions) AND keeps display() as the official fallback for
+		// Obsidian < 1.13 — minAppVersion is 1.8.7 and the docs sanction exactly this:
+		// "Only implement display() as a fallback for plugins that need to support Obsidian
+		// versions older than 1.13.0." Overriding it still trips @typescript-eslint/no-deprecated;
+		// eslint-comments/no-restricted-disable forbids an inline disable, so the rule is
+		// scoped off for this file instead.
 		files: ['src/ui/SettingTab.ts'],
 		rules: {
-			'obsidianmd/settings-tab/prefer-setting-definitions': 'off',
 			'@typescript-eslint/no-deprecated': 'off',
+		},
+	},
+	{
+		// applyGrouping() drives the left ribbon's flex `order` per icon from user-configured,
+		// runtime-computed group layout (computeRibbonLayout) — values CSS cannot express
+		// since they depend on settings data, not a fixed visual state. onunload() resets the
+		// same property to restore native ribbon order. eslint-comments/no-restricted-disable
+		// forbids an inline disable, so the rule is scoped off for this file instead.
+		files: ['src/main.ts'],
+		rules: {
+			'obsidianmd/no-static-styles-assignment': 'off',
 		},
 	},
 );

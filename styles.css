@@ -24,3 +24,51 @@
 .ribbon-organizer-iconpick-glyph .svg-icon { flex: none; }
 .ribbon-organizer-iconpick-pack { margin-left: auto; font-size: var(--font-ui-smaller); color: var(--text-faint);
   text-transform: uppercase; letter-spacing: 0.05em; }
+
+/* Ribbon grouping — divider between adjacent non-empty groups (desktop left ribbon).
+ * A real flex child whose inline `order` slots it between two groups; the container's own
+ * gap supplies the surrounding spacing. */
+.ribbon-organizer-divider { flex: none; height: 0; border-top: 1px solid var(--background-modifier-border); margin: 2px 10%; }
+
+/* Declarative settings shell: one render-type definition row whose element is taken over by
+ * the tabbed panel; neutralize the setting-item row chrome so it lays out as a block. */
+.setting-item.ribbon-organizer-section { display: block; padding: 0; border-top: none; }
+
+/* Settings panel tabs (same pattern as config-sync) */
+.ribbon-organizer-tabs { display: flex; gap: var(--size-4-1); margin-bottom: var(--size-4-3);
+  border-bottom: 1px solid var(--background-modifier-border); overflow-x: auto; }
+.ribbon-organizer-tab { display: flex; align-items: center; gap: var(--size-2-2); background: none;
+  box-shadow: none; border: none; border-radius: 0; padding: var(--size-4-1) var(--size-4-2);
+  cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent;
+  white-space: nowrap; flex: none; }
+.ribbon-organizer-tab.is-active { color: var(--text-normal); border-bottom-color: var(--interactive-accent); }
+.ribbon-organizer-tab-icon { display: flex; align-items: center; }
+.ribbon-organizer-tab-desc { color: var(--text-muted); font-size: var(--font-ui-small);
+  margin-bottom: var(--size-4-3); }
+
+/* Ribbon groups settings */
+.ribbon-organizer-rg-filter { width: 100%; margin-bottom: 8px; }
+.ribbon-organizer-rg-list { display: flex; flex-direction: column; border: 1px solid var(--background-modifier-border);
+  border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
+.ribbon-organizer-rg-hdr { display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-weight: 600;
+  background: var(--background-secondary); border-top: 1px solid var(--background-modifier-border); }
+.ribbon-organizer-rg-hdr:first-child { border-top: none; }
+.ribbon-organizer-rg-item { display: flex; align-items: center; gap: 8px; padding: 5px 10px 5px 24px;
+  border-top: 1px solid var(--background-modifier-border); }
+.ribbon-organizer-rg-item.is-missing { opacity: 0.55; }
+.ribbon-organizer-rg-item.is-filtered-out { display: none; }
+.ribbon-organizer-rg-grip { display: inline-flex; color: var(--text-faint); cursor: grab; --icon-size: 14px; }
+.ribbon-organizer-rg-icon { display: inline-flex; --icon-size: 16px; }
+.ribbon-organizer-rg-icon .svg-icon { flex: none; }
+.ribbon-organizer-rg-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ribbon-organizer-rg-plugin { margin-left: auto; font-size: var(--font-ui-smaller); color: var(--text-faint); }
+.ribbon-organizer-rg-missing { font-size: var(--font-ui-smaller); color: var(--text-faint); }
+.ribbon-organizer-rg-badge { margin-left: 4px; padding: 1px 7px; border-radius: 8px;
+  font-size: var(--font-ui-smaller); color: var(--text-muted); background: var(--background-modifier-border); }
+.ribbon-organizer-rg-hdr .ribbon-organizer-rg-btns { margin-left: auto; }
+.ribbon-organizer-rg-btns { flex: none; display: flex; gap: 2px; }
+.ribbon-organizer-rg-rename { font-weight: 600; }
+.ribbon-organizer-rg-addbar { display: flex; gap: 8px; margin-bottom: 18px; }
+.ribbon-organizer-rg-note { color: var(--text-faint); margin-bottom: 18px; }
+.ribbon-organizer-rg-hdr.is-drop-target, .ribbon-organizer-rg-item.is-drop-target {
+  box-shadow: inset 0 2px 0 var(--interactive-accent); }
