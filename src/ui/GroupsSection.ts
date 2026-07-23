@@ -23,6 +23,8 @@ type DragPayload =
 // its own container (the outer settings scroller is untouched, so scroll position holds).
 export class GroupsSection {
   private filterQuery = "";
+  private expanded = new Set<string>(); // group ids; empty = all collapsed (session-only, like filterQuery)
+  private refreshVisibility: () => void = () => {};
   private drag: DragPayload | null = null;
   private containerEl: HTMLElement | null = null;
 
@@ -58,11 +60,16 @@ export class GroupsSection {
     filterEl.value = this.filterQuery;
 
     const listEl = containerEl.createDiv({ cls: "ribbon-organizer-rg-list" });
-    const itemRows: { el: HTMLElement; haystack: string }[] = [];
+    const itemRows: { el: HTMLElement; haystack: string; groupId: string }[] = [];
     const applyFilter = (): void => {
       const q = this.filterQuery.trim().toLowerCase();
-      for (const r of itemRows) r.el.toggleClass("is-filtered-out", q !== "" && !r.haystack.includes(q));
+      for (const r of itemRows) {
+        r.el.toggleClass("is-filtered-out", q !== "" && !r.haystack.includes(q));
+        // A non-empty query temporarily reveals matches inside collapsed groups; stored state is untouched.
+        r.el.toggleClass("is-collapsed", q === "" && !this.expanded.has(r.groupId));
+      }
     };
+    this.refreshVisibility = applyFilter;
     // Filtering toggles row visibility in place — no re-render, so the input keeps focus.
     filterEl.addEventListener("input", () => {
       this.filterQuery = filterEl.value;
@@ -70,41 +77,60 @@ export class GroupsSection {
     });
 
     this.plugin.settings.groups.forEach((group, groupIndex) => {
-      this.renderGroupHeader(listEl, group, groupIndex);
       const members =
         group.id === UNGROUPED_ID
           ? snapshot.filter((i) => !claimed.has(i.id)).map((i) => ({ itemId: i.id, live: i }))
           : group.items.map((itemId) => ({ itemId, live: liveById.get(itemId) }));
+      this.renderGroupHeader(listEl, group, groupIndex, members.length);
       members.forEach((m, memberIndex) => {
         const row = this.renderItemRow(listEl, group, m.itemId, m.live, memberIndex);
         const pluginId = m.itemId.split(":")[0] ?? "";
-        itemRows.push({ el: row, haystack: `${(m.live?.title ?? m.itemId).toLowerCase()} ${pluginId.toLowerCase()}` });
+        itemRows.push({
+          el: row,
+          haystack: `${(m.live?.title ?? m.itemId).toLowerCase()} ${pluginId.toLowerCase()}`,
+          groupId: group.id,
+        });
       });
     });
     applyFilter();
 
     const addbar = containerEl.createDiv({ cls: "ribbon-organizer-rg-addbar" });
     new ButtonComponent(addbar).setButtonText("New group").onClick(() => {
-      this.plugin.settings.groups = addGroup(this.plugin.settings.groups, crypto.randomUUID(), "New group");
+      const id = crypto.randomUUID();
+      this.expanded.add(id); // a just-created group is immediately renamed/filled — start it expanded
+      this.plugin.settings.groups = addGroup(this.plugin.settings.groups, id, "New group");
       this.persist();
     });
   }
 
-  private renderGroupHeader(listEl: HTMLElement, group: RibbonGroup, groupIndex: number): void {
+  private renderGroupHeader(listEl: HTMLElement, group: RibbonGroup, groupIndex: number, memberCount: number): void {
     const hdr = listEl.createDiv({ cls: "ribbon-organizer-rg-hdr", attr: { draggable: "true" } });
     const grip = hdr.createSpan({ cls: "ribbon-organizer-rg-grip" });
     setIcon(grip, "grip-vertical");
+    const chevron = hdr.createSpan({ cls: "ribbon-organizer-rg-chevron" });
+    setIcon(chevron, this.expanded.has(group.id) ? "chevron-down" : "chevron-right");
     const nameEl = hdr.createSpan({ cls: "ribbon-organizer-rg-name", text: group.name });
+    hdr.createSpan({ cls: "ribbon-organizer-rg-count", text: `· ${memberCount}` });
     if (group.id === UNGROUPED_ID) {
       hdr.createSpan({ cls: "ribbon-organizer-rg-badge", text: "New icons land here" });
     } else {
       const btns = hdr.createDiv({ cls: "ribbon-organizer-rg-btns" });
       new ExtraButtonComponent(btns).setIcon("pencil").setTooltip("Rename group").onClick(() => this.startRename(nameEl, group));
       new ExtraButtonComponent(btns).setIcon("x").setTooltip("Delete group (members fall to ungrouped)").onClick(() => {
+        this.expanded.delete(group.id);
         this.plugin.settings.groups = deleteGroup(this.plugin.settings.groups, group.id);
         this.persist();
       });
     }
+    // Click toggles collapse; ignore clicks in the buttons area and on the inline-rename input.
+    hdr.addEventListener("click", (e) => {
+      const t = e.target;
+      if (t instanceof Element && (t.closest(".ribbon-organizer-rg-btns") !== null || t.tagName === "INPUT")) return;
+      if (this.expanded.has(group.id)) this.expanded.delete(group.id);
+      else this.expanded.add(group.id);
+      setIcon(chevron, this.expanded.has(group.id) ? "chevron-down" : "chevron-right");
+      this.refreshVisibility();
+    });
     hdr.addEventListener("dragstart", (e) => this.onDragStart(e, { type: "group", groupId: group.id }));
     this.wireDropTarget(hdr, (payload) => {
       if (payload.type === "group") {
