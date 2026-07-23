@@ -1,5 +1,9 @@
 # Ribbon Organizer
 
+[![release](https://img.shields.io/github/v/release/xooooooooox/obsidian-ribbon-organizer?label=release)](https://github.com/xooooooooox/obsidian-ribbon-organizer/releases/latest)
+[![Static Badge](https://img.shields.io/badge/README-EN-blue)](./README.md)
+[![Static Badge](https://img.shields.io/badge/README-中-red)](./README.zh.md)
+
 An [Obsidian](https://obsidian.md) plugin that organizes the left ribbon and launches your commands from a configurable ribbon menu.
 
 - **Ribbon groups** (desktop): order the ribbon icons into named groups from **Settings → Ribbon Organizer** — drag icons between groups, drag groups to reorder. A thin divider line renders between adjacent non-empty groups. Icons you haven't assigned fall into the ungrouped bucket, so newly installed plugins land in a predictable spot. Visibility stays native: hide/unhide icons via Obsidian's right-click as usual.
