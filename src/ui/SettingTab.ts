@@ -1,10 +1,7 @@
-import { App, ButtonComponent, ExtraButtonComponent, PluginSettingTab, setIcon } from "obsidian";
+import { App, PluginSettingTab, setIcon } from "obsidian";
 import type { SettingDefinitionItem } from "obsidian";
-import { isSeparator } from "../core/types";
-import { CommandSelectModal } from "./CommandSelectModal";
 import { GroupsSection } from "./GroupsSection";
-import { IconSelectModal } from "./IconSelectModal";
-import { renderIcon } from "./iconRender";
+import { QuickMenusSection } from "./QuickMenusSection";
 import type RibbonOrganizerPlugin from "../main";
 
 type PanelTab = "groups" | "commands";
@@ -16,12 +13,14 @@ const TABS: { id: PanelTab; label: string; icon: string }[] = [
 
 export class RibbonOrganizerSettingTab extends PluginSettingTab {
   private groupsSection: GroupsSection;
+  private quickMenusSection: QuickMenusSection;
   private activeTab: PanelTab = "groups";
   private tabbedEl: HTMLElement | null = null;
 
   constructor(app: App, private plugin: RibbonOrganizerPlugin) {
     super(app, plugin);
     this.groupsSection = new GroupsSection(app, plugin);
+    this.quickMenusSection = new QuickMenusSection(app, plugin);
   }
 
   // Declarative shell (Obsidian 1.13+): one render-type definition whose name/desc/aliases
@@ -70,89 +69,6 @@ export class RibbonOrganizerSettingTab extends PluginSettingTab {
     }
     const body = containerEl.createDiv();
     if (this.activeTab === "groups") this.groupsSection.render(body);
-    else this.renderQuickCommands(body);
-  }
-
-  private renderQuickCommands(containerEl: HTMLElement): void {
-    containerEl.empty();
-    containerEl.createDiv({
-      cls: "ribbon-organizer-tab-desc",
-      text: "Commands shown in the Ribbon Organizer menu. A command not installed on this device is greyed out.",
-    });
-
-    const registry = (this.app as unknown as { commands: { commands: Record<string, { icon?: string }> } }).commands.commands;
-    const list = this.plugin.settings.quickCommands;
-    const listEl = containerEl.createDiv({ cls: "ribbon-organizer-qc-list" });
-
-    const persist = (): void => {
-      void (async () => {
-        await this.plugin.saveSettings();
-        this.renderQuickCommands(containerEl); // section re-renders in place; outer scroller untouched
-      })();
-    };
-    const move = (idx: number, delta: number): void => {
-      const a = list[idx];
-      const b = list[idx + delta];
-      if (a === undefined || b === undefined) return;
-      list[idx + delta] = a;
-      list[idx] = b;
-      persist();
-    };
-    const reorderButtons = (row: HTMLElement, idx: number): void => {
-      const btns = row.createDiv({ cls: "ribbon-organizer-qc-btns" });
-      new ExtraButtonComponent(btns).setIcon("chevron-up").setTooltip("Move up").setDisabled(idx === 0).onClick(() => move(idx, -1));
-      new ExtraButtonComponent(btns).setIcon("chevron-down").setTooltip("Move down").setDisabled(idx === list.length - 1).onClick(() => move(idx, 1));
-      new ExtraButtonComponent(btns).setIcon("trash").setTooltip("Remove").onClick(() => {
-        list.splice(idx, 1);
-        persist();
-      });
-    };
-
-    list.forEach((entry, idx) => {
-      if (isSeparator(entry)) {
-        const row = listEl.createDiv({ cls: "ribbon-organizer-qc-seprow" });
-        row.createDiv({ cls: "ribbon-organizer-qc-sepline" });
-        row.createSpan({ cls: "ribbon-organizer-qc-septxt", text: "Separator" });
-        row.createDiv({ cls: "ribbon-organizer-qc-sepline" });
-        reorderButtons(row, idx);
-        return;
-      }
-      const missing = !(entry.commandId in registry);
-      const row = listEl.createDiv({ cls: "ribbon-organizer-qc-row" });
-      if (missing) row.addClass("is-missing");
-      const iconBtn = row.createEl("button", { cls: "ribbon-organizer-qc-icon", attr: { "aria-label": "Change icon" } });
-      const paint = (id: string): void => renderIcon(iconBtn, id, registry[entry.commandId]?.icon, this.app);
-      paint(entry.icon);
-      iconBtn.onclick = (): void => {
-        new IconSelectModal(this.app, (icon) => {
-          entry.icon = icon;
-          paint(icon);
-          void this.plugin.saveSettings();
-        }).open();
-      };
-      const meta = row.createDiv({ cls: "ribbon-organizer-qc-meta" });
-      const input = meta.createEl("input", { cls: "ribbon-organizer-qc-label", attr: { type: "text", placeholder: "Label" } });
-      input.value = entry.label;
-      // Inline edit, no rerender, so the input keeps focus while typing.
-      input.addEventListener("input", () => {
-        entry.label = input.value.trim() || entry.commandId;
-        void this.plugin.saveSettings();
-      });
-      // ★ Spec: no command-id line; only a hint when the command is missing on this device.
-      if (missing) meta.createDiv({ cls: "ribbon-organizer-qc-missing", text: "Not on this device" });
-      reorderButtons(row, idx);
-    });
-
-    const addbar = containerEl.createDiv({ cls: "ribbon-organizer-qc-addbar" });
-    new ButtonComponent(addbar).setButtonText("Add command").setCta().onClick(() => {
-      new CommandSelectModal(this.app, (cmd) => {
-        list.push({ commandId: cmd.id, label: cmd.name, icon: cmd.icon ?? "command" });
-        persist();
-      }).open();
-    });
-    new ButtonComponent(addbar).setButtonText("Add separator").onClick(() => {
-      list.push({ kind: "separator" });
-      persist();
-    });
+    else this.quickMenusSection.render(body);
   }
 }

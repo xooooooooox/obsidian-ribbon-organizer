@@ -14,19 +14,21 @@ Ribbon Organizer ships two features, both configured from one settings panel and
 ## Module map (`src/`)
 
 - **`main.ts`** — lifecycle and the two feature drivers.
-  - Settings: `{ quickCommands: QuickEntry[], groups: RibbonGroup[] }`; `loadSettings()` runs `normalizeGroups` so a hand-edited `data.json` can never crash the plugin.
+  - Settings: `{ menus: QuickMenu[], groups: RibbonGroup[] }`; `loadSettings()` runs `normalizeMenus` (which also migrates the pre-0.4.0 flat `quickCommands` list into one menu) and `normalizeGroups`, so a hand-edited `data.json` can never crash the plugin.
   - `ribbonInternals(app)` validates `app.workspace.leftRibbon` (`items[]` with `id`/`buttonEl`, plus `ribbonItemsEl`); returns null on any shape mismatch.
   - `applyGrouping()` writes flex `order` onto each icon's `buttonEl` and injects `.ribbon-organizer-divider` divs per `computeRibbonLayout`; idempotent; guarded by `Platform.isDesktop` and a session latch (`groupingDisabled`) set when internals validation fails (console.error + one Notice).
   - `observeRibbon()` — a MutationObserver (childList + subtree + `class` attribute, 100 ms debounce) re-applies when icons appear late (lazy-loading plugins) or native hide/unhide toggles; it is disconnected while `applyGrouping` writes (so our own edits can't re-trigger it) and on unload.
   - `onunload()` clears every inline `order` and removes every injected divider — the stock ribbon returns instantly.
-  - `openMenu()` builds the quick-commands menu from `quickMenuEntries`; `menu.setUseNativeMenu(false)` forces a DOM menu because native macOS menus cannot render command/iconize icons.
+  - `syncRibbonMenus()` rebuilds the plugin's composite ribbon icons from `settings.menus` (full remove-and-re-register; grouping's flex `order` keeps positions stable). `openMenu(evt, menuId)` builds that menu's dropdown from `quickMenuEntries`; `menu.setUseNativeMenu(false)` forces a DOM menu because native macOS menus cannot render command/iconize icons.
   - `ribbonSnapshot()` is the settings UI's read-only view of the live ribbon.
 - **`core/ribbonGroups.ts`** — the grouping model. `RibbonGroup` (`id`/`name`/`items`), the `UNGROUPED_ID` sentinel, `defaultGroups`, `normalizeGroups`, `computeRibbonLayout`, and the pure mutations `addGroup` / `renameGroup` / `deleteGroup` / `moveGroup` / `moveItemToGroup` — all return fresh arrays and throw on unknown ids or sentinel violations.
 - **`core/quickCommands.ts`** — `quickMenuEntries()`: flags commands not registered on this device as `disabled` and normalizes separators (no leading/trailing/consecutive; a list with no runnable command collapses to `[]`).
+- **`core/quickMenus.ts`** — the quick-menus model: `defaultMenus`, `uniqueMenuName`, and `normalizeMenus` (validates persisted menus, fills missing ids, suffixes duplicate names, migrates the legacy flat `quickCommands` list).
 - **`core/icons.ts`** — `iconChoices()`: composes Obsidian's built-in icon ids with iconize custom packs into one picker list (the `lucide-icons` pack is dropped — Obsidian already ships Lucide).
-- **`core/types.ts`** — `QuickCommand` / `QuickSeparator` / `QuickEntry` and the `isSeparator` guard.
-- **`ui/SettingTab.ts`** — the dual-path, two-tab panel. `getSettingDefinitions()` (Obsidian 1.13+) returns one render-type definition whose name/desc/aliases feed settings search and whose row element hosts the whole tabbed panel; `display()` renders the same panel as the official < 1.13 fallback. Also owns the Quick commands section (rows, reorder, icon/label editing, add bar).
+- **`core/types.ts`** — `QuickCommand` / `QuickSeparator` / `QuickEntry`, the `isSeparator` guard, and `QuickMenu` (one composite ribbon icon; ribbon id derives from `name`, `id` is the stable settings identity).
+- **`ui/SettingTab.ts`** — the dual-path, two-tab panel. `getSettingDefinitions()` (Obsidian 1.13+) returns one render-type definition whose name/desc/aliases feed settings search and whose row element hosts the whole tabbed panel; `display()` renders the same panel as the official < 1.13 fallback. Delegates both tabs to their section classes.
 - **`ui/GroupsSection.ts`** — the Ribbon groups tab: a single column mirroring the ribbon's final order (group headers mark where dividers render), with in-place filter, collapsible groups (default collapsed; session-only `expanded` set, chevron + member count on headers; a non-empty filter query temporarily reveals matches inside collapsed groups without touching the stored state — two distinct hidden classes, `is-filtered-out` vs `is-collapsed`), HTML5 drag-and-drop (items within/across groups, whole groups onto headers; dropping on a collapsed header appends without expanding), a ⋮ "Move to group" menu, and inline rename. One instance lives on the SettingTab so filter text and collapse state survive re-renders; `persist()` = save → `applyGrouping()` → re-render own container (outer scroll position holds).
+- **`ui/QuickMenusSection.ts`** — the Quick commands tab: one collapsible section per menu (default collapsed; session-only `expanded` set; new menu starts expanded), header = chevron + icon button (icon picker) + inline name input (empty/duplicate names revert — names are the ribbon ids) + command count + delete; body = the per-entry rows (icon button, label input, always-visible faint command id, trash; separators) with grip-handle drag-and-drop — drop on a row inserts before it, drop on a menu header appends to that menu's end (own header included; collapsed headers accept drops) — and that menu's add bar. Menu-level changes call `plugin.syncRibbonMenus()`; entry-level changes (including drag moves) only save.
 - **`ui/iconRender.ts`** — `renderIcon()` fallback chain: Obsidian `setIcon` → iconize `setIconForNode` → the command's own icon → `"command"`; plus the iconize public-API accessor.
 - **`ui/IconSelectModal.ts` / `ui/CommandSelectModal.ts`** — `FuzzySuggestModal` pickers over the icon catalog / command registry.
 
@@ -47,9 +49,16 @@ Ribbon Organizer ships two features, both configured from one settings panel and
 
 ```json
 {
-  "quickCommands": [
-    { "commandId": "remotely-save:start-sync", "label": "Sync now", "icon": "refresh-cw" },
-    { "kind": "separator" }
+  "menus": [
+    {
+      "id": "a41c…",
+      "name": "Ribbon Organizer",
+      "icon": "menu",
+      "entries": [
+        { "commandId": "remotely-save:start-sync", "label": "Sync now", "icon": "refresh-cw" },
+        { "kind": "separator" }
+      ]
+    }
   ],
   "groups": [
     { "id": "b2f1…", "name": "Sync", "items": ["config-sync:Config Sync", "remotely-save:remotely-save"] },
@@ -70,5 +79,5 @@ Ribbon Organizer ships two features, both configured from one settings panel and
 ## How to extend
 
 - **A new grouping behavior**: add a pure function to `core/ribbonGroups.ts` with tests, then wire it from `GroupsSection` (state change → `persist()`). `computeRibbonLayout` is the single source of truth for what the ribbon looks like.
-- **A new quick-entry kind**: extend the `QuickEntry` union in `core/types.ts`, teach `quickMenuEntries` its menu shape, and add its row renderer in `SettingTab.renderQuickCommands`.
+- **A new quick-entry kind**: extend the `QuickEntry` union in `core/types.ts`, teach `quickMenuEntries` its menu shape and `normalizeMenus` its persisted shape, and add its row renderer in `QuickMenusSection.renderEntries`.
 - **When every target device runs Obsidian ≥ 1.13**: raise `minAppVersion`, delete `display()` in `ui/SettingTab.ts` and the matching `no-deprecated` scope-off in `eslint.config.mts`.

@@ -1,19 +1,15 @@
 import { App, Menu, Notice, Platform, Plugin } from "obsidian";
 import { quickMenuEntries } from "./core/quickCommands";
+import { defaultMenus, normalizeMenus } from "./core/quickMenus";
 import { RibbonGroup, computeRibbonLayout, defaultGroups, normalizeGroups } from "./core/ribbonGroups";
-import { QuickEntry } from "./core/types";
+import { QuickMenu } from "./core/types";
 import { renderIcon } from "./ui/iconRender";
 import { RibbonOrganizerSettingTab } from "./ui/SettingTab";
 
 interface RibbonOrganizerSettings {
-  quickCommands: QuickEntry[]; // commands + separators surfaced in the ribbon menu
-  groups: RibbonGroup[];       // top-to-bottom ribbon group order (includes the ungrouped sentinel)
+  menus: QuickMenu[];    // user-defined ribbon menus: one composite ribbon icon each
+  groups: RibbonGroup[]; // top-to-bottom ribbon group order (includes the ungrouped sentinel)
 }
-
-const DEFAULT_SETTINGS: RibbonOrganizerSettings = {
-  quickCommands: [],
-  groups: defaultGroups(),
-};
 
 // A live left-ribbon icon as exposed to the settings UI.
 export interface RibbonSnapshotItem {
@@ -59,14 +55,15 @@ function ribbonInternals(app: App): RibbonInternals | null {
 }
 
 export default class RibbonOrganizerPlugin extends Plugin {
-  settings: RibbonOrganizerSettings = DEFAULT_SETTINGS;
+  settings: RibbonOrganizerSettings = { menus: defaultMenus(), groups: defaultGroups() };
+  private menuIcons: { name: string; el: HTMLElement }[] = [];
   private ribbonObserver: MutationObserver | null = null;
   private applyTimer: number | null = null;
   private groupingDisabled = false;
 
   async onload(): Promise<void> {
     await this.loadSettings();
-    this.addRibbonIcon("menu", "Ribbon Organizer", (evt) => this.openMenu(evt));
+    this.syncRibbonMenus();
     this.addSettingTab(new RibbonOrganizerSettingTab(this.app, this));
     this.app.workspace.onLayoutReady(() => this.applyGrouping());
   }
@@ -82,9 +79,11 @@ export default class RibbonOrganizerPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    this.settings = Object.assign({}, DEFAULT_SETTINGS, (await this.loadData()) as Partial<RibbonOrganizerSettings> | null);
-    this.settings.quickCommands = [...this.settings.quickCommands]; // never alias DEFAULT_SETTINGS' array
-    this.settings.groups = normalizeGroups(this.settings.groups);   // validates + always a fresh array
+    const raw = ((await this.loadData()) ?? {}) as { menus?: unknown; quickCommands?: unknown; groups?: unknown };
+    this.settings = {
+      menus: normalizeMenus(raw.menus, raw.quickCommands), // pre-0.4.0 quickCommands migrates to one menu
+      groups: normalizeGroups(raw.groups ?? defaultGroups()),
+    };
   }
 
   async saveSettings(): Promise<void> {
@@ -138,7 +137,33 @@ export default class RibbonOrganizerPlugin extends Plugin {
     this.ribbonObserver.observe(ribbonItemsEl, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
   }
 
-  private openMenu(evt: MouseEvent): void {
+  // Rebuilds this plugin's composite ribbon icons from settings: every previously registered
+  // icon is removed (DOM element plus its leftRibbon.items entry when the internals are
+  // readable — with unreadable internals grouping is disabled anyway, so DOM removal alone
+  // suffices), then all menus re-register. Re-registration appends at the ribbon's end, but
+  // grouping controls visual position via flex order, so a full rebuild is invisible.
+  syncRibbonMenus(): void {
+    const ribbon = (this.app.workspace as unknown as { leftRibbon?: { items?: unknown } }).leftRibbon;
+    const items = ribbon !== undefined && Array.isArray(ribbon.items) ? (ribbon.items as { id?: unknown }[]) : null;
+    for (const registered of this.menuIcons) {
+      registered.el.remove();
+      if (items !== null) {
+        const idx = items.findIndex((it) => it.id === `${this.manifest.id}:${registered.name}`);
+        if (idx !== -1) items.splice(idx, 1);
+      }
+    }
+    this.menuIcons = [];
+    for (const menu of this.settings.menus) {
+      const el = this.addRibbonIcon(menu.icon, menu.name, (evt) => this.openMenu(evt, menu.id));
+      this.menuIcons.push({ name: menu.name, el });
+    }
+    // During onload the layout isn't ready yet; the onLayoutReady hook applies grouping then.
+    if (this.app.workspace.layoutReady) this.applyGrouping();
+  }
+
+  private openMenu(evt: MouseEvent, menuId: string): void {
+    const quickMenu = this.settings.menus.find((m) => m.id === menuId);
+    if (quickMenu === undefined) return; // deleted since registration; syncRibbonMenus already removed the icon
     const menu = new Menu();
     // Force a DOM menu: on macOS (nativeMenus default) this would render as a native OS menu,
     // which cannot show the built-in or iconize command icons. DOM mode renders them; no-op on
@@ -147,7 +172,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
     const commands = (this.app as unknown as {
       commands: { commands: Record<string, { icon?: string }>; executeCommandById: (id: string) => void };
     }).commands;
-    const entries = quickMenuEntries(this.settings.quickCommands, (id) => id in commands.commands);
+    const entries = quickMenuEntries(quickMenu.entries, (id) => id in commands.commands);
     if (entries.length === 0) {
       menu.addItem((i) => i.setTitle("No commands configured — add them in the plugin settings").setDisabled(true));
     }
