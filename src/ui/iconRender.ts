@@ -29,7 +29,16 @@ export function renderIcon(node: HTMLElement, iconId: string, fallbackIcon: stri
     api.setIconForNode(iconId, node);
     const svg = node.querySelector("svg");
     if (svg !== null) {
+      // Iconize injects at its file-tree metrics — fontSize-px width/height attributes on the
+      // svg, its extra-margin setting inline on the host node — which misaligns ribbon buttons
+      // against native icons. Strip them (setIconForNode is synchronous, and iconize never
+      // touches the node again) so the icon adopts the host's metrics like a setIcon result.
       svg.classList.add("svg-icon");
+      svg.removeAttribute("width");
+      svg.removeAttribute("height");
+      for (const prop of ["margin", "margin-top", "margin-right", "margin-bottom", "margin-left"]) {
+        node.style.removeProperty(prop);
+      }
       return;
     }
   }
