@@ -38,7 +38,7 @@ export class GroupsSection {
     containerEl.empty();
     containerEl.createDiv({
       cls: "ribbon-organizer-tab-desc",
-      text: "Order the left-ribbon icons into groups. A divider line renders between adjacent non-empty groups; icons in no group fall into the ungrouped bucket.",
+      text: "Order the left-ribbon icons into groups and toggle their visibility. Hiding an icon here also hides it in Obsidian and Commander; a divider renders between adjacent non-empty groups.",
     });
 
     if (!Platform.isDesktop) {
@@ -81,7 +81,7 @@ export class GroupsSection {
         group.id === UNGROUPED_ID
           ? snapshot.filter((i) => !claimed.has(i.id)).map((i) => ({ itemId: i.id, live: i }))
           : group.items.map((itemId) => ({ itemId, live: liveById.get(itemId) }));
-      this.renderGroupHeader(listEl, group, groupIndex, members.length);
+      this.renderGroupHeader(listEl, group, groupIndex, members);
       members.forEach((m, memberIndex) => {
         const row = this.renderItemRow(listEl, group, m.itemId, m.live, memberIndex);
         const pluginId = m.itemId.split(":")[0] ?? "";
@@ -103,19 +103,33 @@ export class GroupsSection {
     });
   }
 
-  private renderGroupHeader(listEl: HTMLElement, group: RibbonGroup, groupIndex: number, memberCount: number): void {
+  private renderGroupHeader(
+    listEl: HTMLElement,
+    group: RibbonGroup,
+    groupIndex: number,
+    members: { itemId: string; live: RibbonSnapshotItem | undefined }[]
+  ): void {
     const hdr = listEl.createDiv({ cls: "ribbon-organizer-rg-hdr", attr: { draggable: "true" } });
     const grip = hdr.createSpan({ cls: "ribbon-organizer-rg-grip" });
     setIcon(grip, "grip-vertical");
     const chevron = hdr.createSpan({ cls: "ribbon-organizer-rg-chevron" });
     setIcon(chevron, this.expanded.has(group.id) ? "chevron-down" : "chevron-right");
     const nameEl = hdr.createSpan({ cls: "ribbon-organizer-rg-name", text: group.name });
-    hdr.createSpan({ cls: "ribbon-organizer-rg-count", text: `· ${memberCount}` });
+    // Count pill: n member rows (missing included); with hidden members it reads v/n, total dimmed.
+    const hiddenCount = members.filter((m) => m.live?.hidden === true).length;
+    const count = hdr.createSpan({ cls: "ribbon-organizer-rg-count" });
+    count.appendText(String(members.length - hiddenCount));
+    if (hiddenCount > 0) count.createSpan({ cls: "ribbon-organizer-rg-count-total", text: `/${members.length}` });
     if (group.id === UNGROUPED_ID) {
       hdr.createSpan({ cls: "ribbon-organizer-rg-badge", text: "New icons land here" });
     } else {
+      // Click the name to rename in place — the pencil button is gone (same interaction as the
+      // Quick commands tab). stopPropagation keeps the click from toggling the collapse.
+      nameEl.addEventListener("click", (e) => {
+        e.stopPropagation();
+        this.startRename(nameEl, group);
+      });
       const btns = hdr.createDiv({ cls: "ribbon-organizer-rg-btns" });
-      new ExtraButtonComponent(btns).setIcon("pencil").setTooltip("Rename group").onClick(() => this.startRename(nameEl, group));
       new ExtraButtonComponent(btns).setIcon("x").setTooltip("Delete group (members fall to ungrouped)").onClick(() => {
         this.expanded.delete(group.id);
         this.plugin.settings.groups = deleteGroup(this.plugin.settings.groups, group.id);
@@ -157,15 +171,28 @@ export class GroupsSection {
   ): HTMLElement {
     const row = listEl.createDiv({ cls: "ribbon-organizer-rg-item", attr: { draggable: "true" } });
     if (live === undefined) row.addClass("is-missing");
+    if (live?.hidden === true) row.addClass("is-hidden");
     const grip = row.createSpan({ cls: "ribbon-organizer-rg-grip" });
     setIcon(grip, "grip-vertical");
     const iconEl = row.createSpan({ cls: "ribbon-organizer-rg-icon" });
     if (live !== undefined) renderIcon(iconEl, live.icon, undefined, this.app);
     else setIcon(iconEl, "help");
     row.createSpan({ cls: "ribbon-organizer-rg-title", text: live?.title ?? itemId });
+    if (live?.hidden === true) row.createSpan({ cls: "ribbon-organizer-rg-hiddenchip", text: "hidden" });
     if (live === undefined) row.createSpan({ cls: "ribbon-organizer-rg-missing", text: "Not on this device" });
     row.createSpan({ cls: "ribbon-organizer-rg-plugin", text: itemId.split(":")[0] ?? "" });
     const btns = row.createDiv({ cls: "ribbon-organizer-rg-btns" });
+    if (live !== undefined) {
+      const eye = new ExtraButtonComponent(btns)
+        .setIcon(live.hidden ? "eye-off" : "eye")
+        .setTooltip(live.hidden ? "Show this icon" : "Hide this icon")
+        .onClick(() => {
+          void this.plugin.setIconHidden(itemId, !live.hidden).then(() => {
+            if (this.containerEl !== null) this.render(this.containerEl); // hide state lives outside our settings — re-render only
+          });
+        });
+      eye.extraSettingsEl.toggleClass("is-eye-off", live.hidden);
+    }
     const more = new ExtraButtonComponent(btns).setIcon("ellipsis-vertical").setTooltip("Move to group");
     more.onClick(() => {
       const menu = new Menu();

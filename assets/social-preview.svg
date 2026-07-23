@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" font-family="-apple-system, 'Segoe UI', sans-serif">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#26202b"/><stop offset="1" stop-color="#171519"/></linearGradient>
+    <linearGradient id="tile" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d48a5b"/><stop offset="1" stop-color="#c25bd4"/></linearGradient>
+  </defs>
+  <rect width="1280" height="640" fill="url(#bg)"/>
+  <rect x="240" y="212" width="216" height="216" rx="48" fill="url(#tile)"/>
+  <g transform="translate(276 248) scale(6)" fill="none" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.5" y="3" width="19" height="18" rx="3"/><path d="M9 3v18"/><circle cx="5.75" cy="7.5" r="1.2" fill="#ffffff" stroke="none"/><circle cx="5.75" cy="11" r="1.2" fill="#ffffff" stroke="none"/><path d="M4.4 14h2.7"/><circle cx="5.75" cy="17" r="1.2" fill="#ffffff" stroke="none"/>
+  </g>
+  <text x="516" y="316" fill="#f0eef2" font-size="64" font-weight="700">Ribbon Organizer</text>
+  <text x="518" y="372" fill="#a89fb3" font-size="30">Group, reorder and hide your Obsidian ribbon icons</text>
+</svg>

@@ -76,7 +76,13 @@
 .ribbon-organizer-rg-item.is-filtered-out { display: none; }
 .ribbon-organizer-rg-item.is-collapsed { display: none; }
 .ribbon-organizer-rg-chevron { display: inline-flex; color: var(--text-faint); --icon-size: 14px; }
-.ribbon-organizer-rg-count { font-size: var(--font-ui-smaller); color: var(--text-faint); font-weight: 400; }
+.ribbon-organizer-rg-count { font-size: var(--font-ui-smaller); color: var(--text-muted); font-weight: 400; background: var(--background-modifier-hover); border-radius: 9px; padding: 1px 8px; }
+.ribbon-organizer-rg-count-total { color: var(--text-faint); }
+.ribbon-organizer-rg-name { cursor: text; }
+.ribbon-organizer-rg-item.is-hidden .ribbon-organizer-rg-icon,
+.ribbon-organizer-rg-item.is-hidden .ribbon-organizer-rg-title { color: var(--text-faint); }
+.ribbon-organizer-rg-hiddenchip { font-size: var(--font-ui-smaller); color: var(--text-accent); background: var(--background-modifier-hover); border-radius: 8px; padding: 0 7px; }
+.ribbon-organizer-rg-btns .is-eye-off { color: var(--text-accent); }
 .ribbon-organizer-rg-grip { display: inline-flex; color: var(--text-faint); cursor: grab; --icon-size: 14px; }
 .ribbon-organizer-rg-icon { display: inline-flex; --icon-size: 16px; }
 .ribbon-organizer-rg-icon .svg-icon { flex: none; }

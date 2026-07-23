@@ -7,7 +7,7 @@ import type RibbonOrganizerPlugin from "../main";
 type PanelTab = "groups" | "commands";
 
 const TABS: { id: PanelTab; label: string; icon: string }[] = [
-  { id: "groups", label: "Ribbon groups", icon: "rows-3" },
+  { id: "groups", label: "Ribbon", icon: "rows-3" },
   { id: "commands", label: "Quick commands", icon: "menu" },
 ];
 
@@ -31,8 +31,8 @@ export class RibbonOrganizerSettingTab extends PluginSettingTab {
     return [
       {
         name: "Ribbon Organizer",
-        desc: "Ribbon groups and quick commands.",
-        aliases: ["ribbon groups", "quick commands", "divider", "separator", "reorder", "menu"],
+        desc: "Ribbon and quick commands.",
+        aliases: ["ribbon groups", "quick commands", "divider", "separator", "reorder", "menu", "hide"],
         render: (setting) => {
           setting.settingEl.empty();
           setting.settingEl.addClass("ribbon-organizer-section");
