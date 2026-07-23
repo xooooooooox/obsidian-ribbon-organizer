@@ -74,6 +74,30 @@ export function computeRibbonLayout(groups: RibbonGroup[], live: LiveRibbonItem[
   return { orders, dividerOrders };
 }
 
+export type MenuRow = { kind: "item"; id: string } | { kind: "separator" };
+
+// The phone navbar ribbon menu counterpart of computeRibbonLayout: same walk, but emitting the
+// visible member ids as an ordered row list with a separator between adjacent non-empty groups.
+// Hidden items are omitted entirely — the phone menu never renders them.
+export function computeMenuRows(groups: RibbonGroup[], live: LiveRibbonItem[]): MenuRow[] {
+  const claimed = new Set<string>(groups.flatMap((g) => (g.id === UNGROUPED_ID ? [] : g.items)));
+  const liveById = new Map(live.map((i) => [i.id, i]));
+  const rows: MenuRow[] = [];
+  let anyVisibleBefore = false;
+  for (const group of groups) {
+    const memberIds =
+      group.id === UNGROUPED_ID
+        ? live.filter((i) => !claimed.has(i.id)).map((i) => i.id)
+        : group.items.filter((id) => liveById.has(id));
+    const visibleIds = memberIds.filter((id) => liveById.get(id)?.hidden === false);
+    if (visibleIds.length === 0) continue;
+    if (anyVisibleBefore) rows.push({ kind: "separator" });
+    for (const id of visibleIds) rows.push({ kind: "item", id });
+    anyVisibleBefore = true;
+  }
+  return rows;
+}
+
 function requireGroupIndex(groups: RibbonGroup[], groupId: string): number {
   const idx = groups.findIndex((g) => g.id === groupId);
   if (idx === -1) throw new Error(`Ribbon Organizer: unknown group id "${groupId}"`);

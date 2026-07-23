@@ -42,7 +42,8 @@
 .ribbon-organizer-qc-row.is-drop-target, .ribbon-organizer-qc-seprow.is-drop-target,
 .ribbon-organizer-qm-hdr.is-drop-target { box-shadow: inset 0 2px 0 var(--interactive-accent); }
 
-/* Ribbon grouping — divider between adjacent non-empty groups (desktop left ribbon).
+/* Ribbon grouping — divider between adjacent non-empty groups (desktop left ribbon and the
+ * tablet drawer ribbon).
  * A real flex child whose inline `order` slots it between two groups; the container's own
  * gap supplies the surrounding spacing. */
 .ribbon-organizer-divider { flex: none; height: 0; border-top: 1px solid var(--background-modifier-border); margin: 2px 10%; }
@@ -76,7 +77,7 @@
 .ribbon-organizer-rg-item.is-filtered-out { display: none; }
 .ribbon-organizer-rg-item.is-collapsed { display: none; }
 .ribbon-organizer-rg-chevron { display: inline-flex; color: var(--text-faint); --icon-size: 14px; }
-.ribbon-organizer-rg-count { font-size: var(--font-ui-smaller); color: var(--text-muted); font-weight: 400; background: var(--background-modifier-hover); border-radius: 9px; padding: 1px 8px; }
+.ribbon-organizer-rg-count { font-size: var(--font-ui-smaller); color: var(--text-muted); font-weight: 400; background: var(--background-modifier-hover); border-radius: 9px; padding: 1px 8px; white-space: nowrap; }
 .ribbon-organizer-rg-count-total { color: var(--text-faint); }
 .ribbon-organizer-rg-name { cursor: text; }
 .ribbon-organizer-rg-item.is-hidden .ribbon-organizer-rg-icon,
@@ -98,3 +99,12 @@
 .ribbon-organizer-rg-note { color: var(--text-faint); margin-bottom: 18px; }
 .ribbon-organizer-rg-hdr.is-drop-target, .ribbon-organizer-rg-item.is-drop-target {
   box-shadow: inset 0 2px 0 var(--interactive-accent); }
+
+/* Phone settings: two-line quick-command rows (command id gets its own full-width line),
+ * name input fills the header, taller touch targets, plugin badge dropped for width. */
+.is-phone .ribbon-organizer-qc-row { flex-wrap: wrap; }
+.is-phone .ribbon-organizer-qc-cmdid { flex-basis: 100%; order: 10; max-width: none; margin-left: 39px; }
+.is-phone .ribbon-organizer-qm-name { max-width: none; flex: 1; min-width: 0; }
+.is-phone .ribbon-organizer-rg-hdr, .is-phone .ribbon-organizer-rg-item,
+.is-phone .ribbon-organizer-qm-hdr { min-height: 40px; }
+.is-phone .ribbon-organizer-rg-plugin { display: none; }

@@ -3,6 +3,7 @@ import {
   RibbonGroup,
   UNGROUPED_ID,
   addGroup,
+  computeMenuRows,
   computeRibbonLayout,
   defaultGroups,
   deleteGroup,
@@ -139,5 +140,48 @@ describe("group mutations", () => {
     deleteGroup(groups, "a");
     moveGroup(groups, "b", 0);
     expect(groups).toEqual(copy);
+  });
+});
+
+describe("computeMenuRows", () => {
+  const groups = [
+    { id: "g1", name: "A", items: ["p:one", "p:two"] },
+    { id: UNGROUPED_ID, name: "Ungrouped", items: [] },
+    { id: "g2", name: "B", items: ["p:three"] },
+  ];
+
+  it("lists visible members in group order with separators between non-empty groups", () => {
+    const live = [
+      { id: "p:three", hidden: false },
+      { id: "p:one", hidden: false },
+      { id: "p:free", hidden: false },
+      { id: "p:two", hidden: false },
+    ];
+    expect(computeMenuRows(groups, live)).toEqual([
+      { kind: "item", id: "p:one" },
+      { kind: "item", id: "p:two" },
+      { kind: "separator" },
+      { kind: "item", id: "p:free" },
+      { kind: "separator" },
+      { kind: "item", id: "p:three" },
+    ]);
+  });
+
+  it("omits hidden items and emits no separator around all-hidden groups", () => {
+    const live = [
+      { id: "p:one", hidden: true },
+      { id: "p:two", hidden: true },
+      { id: "p:free", hidden: false },
+      { id: "p:three", hidden: false },
+    ];
+    expect(computeMenuRows(groups, live)).toEqual([
+      { kind: "item", id: "p:free" },
+      { kind: "separator" },
+      { kind: "item", id: "p:three" },
+    ]);
+  });
+
+  it("returns empty for no visible items", () => {
+    expect(computeMenuRows(groups, [{ id: "p:one", hidden: true }])).toEqual([]);
   });
 });

@@ -5,7 +5,7 @@ import { QuickEntry, QuickMenu } from "./types";
 // pre-0.4.0 migration (a single flat `quickCommands` list becomes the first menu). Obsidian-free.
 
 export function defaultMenus(): QuickMenu[] {
-  return [{ id: crypto.randomUUID(), name: "Ribbon Organizer", icon: "menu", entries: [] }];
+  return [{ id: crypto.randomUUID(), name: "Ribbon Organizer", icon: "ribbon-organizer", entries: [] }];
 }
 
 // First free name among `taken`: base, then "base 2", "base 3", …
@@ -36,7 +36,7 @@ export function normalizeMenus(menusRaw: unknown, legacyQuickCommands: unknown):
     return out;
   }
   if (Array.isArray(legacyQuickCommands)) {
-    return [{ id: crypto.randomUUID(), name: "Ribbon Organizer", icon: "menu", entries: normalizeEntries(legacyQuickCommands) }];
+    return [{ id: crypto.randomUUID(), name: "Ribbon Organizer", icon: "ribbon-organizer", entries: normalizeEntries(legacyQuickCommands) }];
   }
   return defaultMenus();
 }

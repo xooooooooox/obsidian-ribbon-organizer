@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { iconChoices, IconPack } from "../src/core/icons";
+import { BRAND_ICON_ID, BRAND_ICON_SVG, iconChoices, IconPack } from "../src/core/icons";
 
 const feishu: IconPack = {
   name: "feishu",
@@ -26,5 +26,13 @@ describe("iconChoices", () => {
 
   it("excludes the lucide-icons pack (Obsidian already provides Lucide)", () => {
     expect(iconChoices([], [lucide, feishu]).map((c) => c.pack)).toEqual(["feishu", "feishu"]);
+  });
+});
+
+describe("brand icon", () => {
+  it("is addIcon-ready: scaled to the 100-viewBox grid, no <svg> root", () => {
+    expect(BRAND_ICON_ID).toBe("ribbon-organizer");
+    expect(BRAND_ICON_SVG).toContain('transform="scale(4.1667)"');
+    expect(BRAND_ICON_SVG).not.toContain("<svg");
   });
 });

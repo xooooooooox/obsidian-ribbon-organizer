@@ -1,8 +1,9 @@
-import { App, Menu, Notice, Platform, Plugin } from "obsidian";
+import { addIcon, App, Menu, Notice, Plugin } from "obsidian";
 import { CmdrHideLists, cmdrHideStyleText, withTitle } from "./core/commanderHide";
+import { BRAND_ICON_ID, BRAND_ICON_SVG } from "./core/icons";
 import { quickMenuEntries } from "./core/quickCommands";
 import { defaultMenus, normalizeMenus } from "./core/quickMenus";
-import { RibbonGroup, computeRibbonLayout, defaultGroups, normalizeGroups } from "./core/ribbonGroups";
+import { RibbonGroup, computeMenuRows, computeRibbonLayout, defaultGroups, normalizeGroups } from "./core/ribbonGroups";
 import { QuickMenu } from "./core/types";
 import { renderIcon } from "./ui/iconRender";
 import { RibbonOrganizerSettingTab } from "./ui/SettingTab";
@@ -88,20 +89,27 @@ export default class RibbonOrganizerPlugin extends Plugin {
   settings: RibbonOrganizerSettings = { menus: defaultMenus(), groups: defaultGroups() };
   private menuIcons: { name: string; el: HTMLElement }[] = [];
   private ribbonObserver: MutationObserver | null = null;
-  private applyTimer: number | null = null;
   private groupingDisabled = false;
+  private mobileNavbarWrapped: { navbar: { showRibbonMenu: (evt: Event) => void }; original: (evt: Event) => void } | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
+    addIcon(BRAND_ICON_ID, BRAND_ICON_SVG);
     this.syncRibbonMenus();
     this.addSettingTab(new RibbonOrganizerSettingTab(this.app, this));
-    this.app.workspace.onLayoutReady(() => this.applyGrouping());
+    this.app.workspace.onLayoutReady(() => {
+      this.applyGrouping();
+      this.wrapMobileRibbonMenu();
+    });
   }
 
   onunload(): void {
     this.ribbonObserver?.disconnect();
     this.ribbonObserver = null;
-    if (this.applyTimer !== null) window.clearTimeout(this.applyTimer);
+    if (this.mobileNavbarWrapped !== null) {
+      this.mobileNavbarWrapped.navbar.showRibbonMenu = this.mobileNavbarWrapped.original;
+      this.mobileNavbarWrapped = null;
+    }
     const internals = ribbonInternals(this.app);
     if (internals === null) return;
     for (const item of internals.items) item.buttonEl.style.order = "";
@@ -139,7 +147,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
   // Applies the configured grouping to the desktop left ribbon: flex order per icon plus one
   // divider element between adjacent non-empty groups. Idempotent; safe to call repeatedly.
   applyGrouping(): void {
-    if (!Platform.isDesktop || this.groupingDisabled) return;
+    if (this.groupingDisabled) return;
     const internals = ribbonInternals(this.app);
     if (internals === null) {
       this.groupingDisabled = true;
@@ -197,17 +205,68 @@ export default class RibbonOrganizerPlugin extends Plugin {
     rebuildCmdrStyle(access.plugin.settings.hide);
   }
 
-  // Re-applies (debounced) when icons are added/removed (late-loading plugins) or native
-  // hide/unhide toggles a class. Reconnected after every apply; disconnected on unload.
+  // Phone surface: the navbar ≡ button REBUILDS a standard Menu from leftRibbon.items on every
+  // open, in array order, skipping natively hidden items — flex order does not apply to it.
+  // Wrap it and regroup the freshly built menu in the same task: the browser has not painted
+  // yet, so the reorder is invisible. Absent on desktop; missing internals leave native behavior.
+  private wrapMobileRibbonMenu(): void {
+    const navbar = (this.app as unknown as { mobileNavbar?: { showRibbonMenu?: unknown } }).mobileNavbar;
+    if (navbar === undefined || navbar === null || typeof navbar.showRibbonMenu !== "function") return;
+    const target = navbar as { showRibbonMenu: (evt: Event) => void };
+    const original = target.showRibbonMenu;
+    this.mobileNavbarWrapped = { navbar: target, original };
+    target.showRibbonMenu = (evt: Event): void => {
+      original.call(target, evt);
+      this.groupRibbonMenu();
+    };
+  }
+
+  // Row↔item mapping is index alignment: one .menu-item per non-natively-hidden item, in items
+  // order. On any mismatch (Obsidian changed the menu shape) the menu is left untouched —
+  // native order, degraded but correct. Commander's CSS hide targets side-dock-ribbon-action
+  // elements and misses these rows, so Commander-hidden titles are dropped here explicitly.
+  private groupRibbonMenu(): void {
+    const internals = ribbonInternals(this.app);
+    if (internals === null) return;
+    const menus = document.body.querySelectorAll(".menu");
+    const menuEl = menus[menus.length - 1];
+    if (menuEl === undefined) return;
+    const rowEls = Array.from(menuEl.querySelectorAll(".menu-item"));
+    const nativeVisible = internals.items.filter((i) => !i.hidden);
+    if (rowEls.length !== nativeVisible.length || rowEls.length === 0) return;
+    const container = rowEls[0]?.parentElement;
+    if (container === null || container === undefined) return;
+    const cmdrHidden = this.cmdrHiddenTitles();
+    const rowById = new Map<string, Element>();
+    nativeVisible.forEach((item, i) => {
+      const row = rowEls[i];
+      if (row === undefined) return;
+      if (cmdrHidden.has(item.title)) row.remove();
+      else rowById.set(item.id, row);
+    });
+    const effective = internals.items.map((i) => ({ id: i.id, hidden: i.hidden || cmdrHidden.has(i.title) }));
+    for (const menuRow of computeMenuRows(this.settings.groups, effective)) {
+      if (menuRow.kind === "separator") {
+        container.createDiv({ cls: "menu-separator" });
+        continue;
+      }
+      const el = rowById.get(menuRow.id);
+      if (el === undefined) continue;
+      container.appendChild(el); // a DOM move keeps the row's tap handler
+      const quickMenu = this.settings.menus.find((m) => `${this.manifest.id}:${m.name}` === menuRow.id);
+      const iconEl = el.querySelector(".menu-item-icon");
+      if (quickMenu !== undefined && iconEl instanceof HTMLElement) renderIcon(iconEl, quickMenu.icon, undefined, this.app);
+    }
+  }
+
+  // Re-applies when icons are added/removed (late-loading plugins, plugins rebuilding their own
+  // buttons) or native hide/unhide toggles a class. Synchronous on purpose: observer callbacks
+  // run at the microtask checkpoint, BEFORE the browser paints, so the restore is invisible —
+  // a debounce here was the flicker users saw. applyGrouping disconnects this observer while it
+  // writes, so our own edits never loop. Reconnected after every apply; disconnected on unload.
   private observeRibbon(ribbonItemsEl: HTMLElement): void {
     if (this.ribbonObserver === null) {
-      this.ribbonObserver = new MutationObserver(() => {
-        if (this.applyTimer !== null) window.clearTimeout(this.applyTimer);
-        this.applyTimer = window.setTimeout(() => {
-          this.applyTimer = null;
-          this.applyGrouping();
-        }, 100);
-      });
+      this.ribbonObserver = new MutationObserver(() => this.applyGrouping());
     }
     this.ribbonObserver.observe(ribbonItemsEl, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
   }
@@ -230,6 +289,9 @@ export default class RibbonOrganizerPlugin extends Plugin {
     this.menuIcons = [];
     for (const menu of this.settings.menus) {
       const el = this.addRibbonIcon(menu.icon, menu.name, (evt) => this.openMenu(evt, menu.id));
+      // addRibbonIcon resolves only registered icon ids; iconize pack ids render blank without
+      // the fallback chain. Obsidian re-renders reuse this element, so once is enough.
+      renderIcon(el, menu.icon, undefined, this.app);
       this.menuIcons.push({ name: menu.name, el });
     }
     // During onload the layout isn't ready yet; the onLayoutReady hook applies grouping then.

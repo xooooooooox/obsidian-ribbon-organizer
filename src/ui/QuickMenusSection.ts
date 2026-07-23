@@ -35,7 +35,7 @@ export class QuickMenusSection {
       const menu: QuickMenu = {
         id: crypto.randomUUID(),
         name: uniqueMenuName("New menu", this.plugin.settings.menus.map((m) => m.name)),
-        icon: "menu",
+        icon: "ribbon-organizer",
         entries: [],
       };
       this.expanded.add(menu.id); // a just-created menu is immediately renamed/filled — start it expanded

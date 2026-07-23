@@ -1,4 +1,4 @@
-import { App, ButtonComponent, ExtraButtonComponent, Menu, Platform, setIcon } from "obsidian";
+import { App, ButtonComponent, ExtraButtonComponent, Menu, setIcon } from "obsidian";
 import {
   RibbonGroup,
   UNGROUPED_ID,
@@ -38,13 +38,9 @@ export class GroupsSection {
     containerEl.empty();
     containerEl.createDiv({
       cls: "ribbon-organizer-tab-desc",
-      text: "Order the left-ribbon icons into groups and toggle their visibility. Hiding an icon here also hides it in Obsidian and Commander; a divider renders between adjacent non-empty groups.",
+      text: "Order the left-ribbon icons into groups and toggle their visibility. Hiding an icon here also hides it in Obsidian and Commander; a divider renders between adjacent non-empty groups. On phones the grouping shapes the navbar ribbon menu; on tablets the drawer ribbon.",
     });
 
-    if (!Platform.isDesktop) {
-      containerEl.createDiv({ cls: "ribbon-organizer-rg-note", text: "Ribbon grouping applies to desktop only." });
-      return;
-    }
     const snapshot = this.plugin.ribbonSnapshot();
     if (snapshot === null) {
       containerEl.createDiv({ cls: "ribbon-organizer-rg-note", text: "Ribbon grouping is incompatible with this Obsidian version." });

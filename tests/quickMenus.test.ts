@@ -5,7 +5,7 @@ describe("normalizeMenus", () => {
   it("returns the default single menu when nothing is stored", () => {
     const out = normalizeMenus(undefined, undefined);
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ name: "Ribbon Organizer", icon: "menu", entries: [] });
+    expect(out[0]).toMatchObject({ name: "Ribbon Organizer", icon: "ribbon-organizer", entries: [] });
     expect(out[0]?.id).toBeTruthy();
   });
 
@@ -13,7 +13,7 @@ describe("normalizeMenus", () => {
     const legacy = [{ commandId: "a:x", label: "X", icon: "cloud" }, { kind: "separator" }];
     const out = normalizeMenus(undefined, legacy);
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ name: "Ribbon Organizer", icon: "menu" });
+    expect(out[0]).toMatchObject({ name: "Ribbon Organizer", icon: "ribbon-organizer" });
     expect(out[0]?.entries).toEqual(legacy);
   });
 
@@ -81,6 +81,6 @@ describe("defaultMenus", () => {
   it("is one empty Ribbon Organizer menu", () => {
     const out = defaultMenus();
     expect(out).toHaveLength(1);
-    expect(out[0]).toMatchObject({ name: "Ribbon Organizer", icon: "menu", entries: [] });
+    expect(out[0]).toMatchObject({ name: "Ribbon Organizer", icon: "ribbon-organizer", entries: [] });
   });
 });
