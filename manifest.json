@@ -1,7 +1,7 @@
 {
 	"id": "ribbon-organizer",
 	"name": "Ribbon Organizer",
-	"version": "0.6.0",
+	"version": "0.6.1",
 	"minAppVersion": "1.8.7",
 	"description": "Group your ribbon and launch commands from a configurable ribbon menu.",
 	"author": "xooooooooox",
