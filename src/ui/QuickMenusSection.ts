@@ -7,7 +7,7 @@ import { renderIcon } from "./iconRender";
 import { withScrollPreserved } from "./scrollKeep";
 import type RibbonOrganizerPlugin from "../main";
 
-// "Quick commands" settings section: one collapsible section per menu (same collapse pattern
+// "Quick menus" settings section: one collapsible section per menu (same collapse pattern
 // as GroupsSection — default collapsed, session-only expanded set, a new menu starts expanded).
 // One instance lives on the SettingTab so collapse state survives re-renders; after every
 // structural edit the section re-renders itself into its own container. Menu-level changes
@@ -81,7 +81,7 @@ export class QuickMenusSection {
       this.persistAndSync();
     });
     const commandCount = menu.entries.filter((e) => !isSeparator(e)).length;
-    hdr.createSpan({ cls: "ribbon-organizer-rg-count", text: `· ${commandCount}` });
+    hdr.createSpan({ cls: "ribbon-organizer-rg-count", text: String(commandCount) });
     const btns = hdr.createDiv({ cls: "ribbon-organizer-rg-btns" });
     new ExtraButtonComponent(btns).setIcon("x").setTooltip("Delete menu (removes its ribbon icon)").onClick(() => {
       this.expanded.delete(menu.id);
@@ -175,9 +175,9 @@ export class QuickMenusSection {
       });
       this.wireDropTarget(row, (from) => this.dropOnRow(from, menu, idx));
     };
-    const removeButton = (row: HTMLElement, idx: number): void => {
+    const removeButton = (row: HTMLElement, idx: number, tooltip: string): void => {
       const rowBtns = row.createDiv({ cls: "ribbon-organizer-qc-btns" });
-      new ExtraButtonComponent(rowBtns).setIcon("trash").setTooltip("Remove").onClick(() => {
+      new ExtraButtonComponent(rowBtns).setIcon("trash").setTooltip(tooltip).onClick(() => {
         list.splice(idx, 1);
         this.persist();
       });
@@ -190,7 +190,7 @@ export class QuickMenusSection {
         row.createDiv({ cls: "ribbon-organizer-qc-sepline" });
         row.createSpan({ cls: "ribbon-organizer-qc-septxt", text: "Separator" });
         row.createDiv({ cls: "ribbon-organizer-qc-sepline" });
-        removeButton(row, idx);
+        removeButton(row, idx, "Remove separator");
         return;
       }
       const missing = !(entry.commandId in registry);
@@ -218,7 +218,7 @@ export class QuickMenusSection {
       if (missing) meta.createDiv({ cls: "ribbon-organizer-qc-missing", text: "Not on this device" });
       // The binding stays visible however the label is edited; hover shows a truncated id in full.
       row.createSpan({ cls: "ribbon-organizer-qc-cmdid", text: entry.commandId, attr: { title: entry.commandId } });
-      removeButton(row, idx);
+      removeButton(row, idx, "Remove command");
     });
 
     const addbar = body.createDiv({ cls: "ribbon-organizer-qc-addbar" });

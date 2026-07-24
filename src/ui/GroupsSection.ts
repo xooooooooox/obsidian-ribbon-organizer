@@ -125,13 +125,13 @@ export class GroupsSection {
       hdr.createSpan({ cls: "ribbon-organizer-rg-badge", text: "New icons land here" });
     } else {
       // Click the name to rename in place — the pencil button is gone (same interaction as the
-      // Quick commands tab). stopPropagation keeps the click from toggling the collapse.
+      // Quick menus tab). stopPropagation keeps the click from toggling the collapse.
       nameEl.addEventListener("click", (e) => {
         e.stopPropagation();
         this.startRename(nameEl, group);
       });
       const btns = hdr.createDiv({ cls: "ribbon-organizer-rg-btns" });
-      new ExtraButtonComponent(btns).setIcon("x").setTooltip("Delete group (members fall to ungrouped)").onClick(() => {
+      new ExtraButtonComponent(btns).setIcon("x").setTooltip("Delete group (members fall to Ungrouped)").onClick(() => {
         this.expanded.delete(group.id);
         this.plugin.settings.groups = deleteGroup(this.plugin.settings.groups, group.id);
         this.persist();
@@ -199,7 +199,7 @@ export class GroupsSection {
       for (const target of this.plugin.settings.groups) {
         if (target.id === group.id) continue;
         menu.addItem((mi) =>
-          mi.setTitle(target.id === UNGROUPED_ID ? "Move to ungrouped" : `Move to ${target.name}`).onClick(() => {
+          mi.setTitle(`Move to ${target.name}`).onClick(() => {
             this.plugin.settings.groups = moveItemToGroup(this.plugin.settings.groups, itemId, target.id);
             this.persist();
           })

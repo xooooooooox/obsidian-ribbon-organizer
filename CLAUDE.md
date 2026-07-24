@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Obsidian plugin: the ribbon housekeeper — orders the left-ribbon icons into named groups with divider lines, and launches commands from a configurable ribbon menu. Grouping spec: `docs/superpowers/specs/2026-07-23-ribbon-grouping-design.md` (read it before changing `applyGrouping` or the settings panel). The Quick commands feature was extracted from [obsidian-config-sync](https://github.com/xooooooooox/obsidian-config-sync); the extraction spec lives in that repo.
+Obsidian plugin: the ribbon housekeeper — orders the left-ribbon icons into named groups with divider lines, and launches commands from a configurable ribbon menu. Grouping spec: `docs/superpowers/specs/2026-07-23-ribbon-grouping-design.md` (read it before changing `applyGrouping` or the settings panel); phone-menu spec: `docs/superpowers/specs/2026-07-24-mobile-menu-and-settings-polish-design.md` (read it before changing `observeMenus`/`groupRibbonMenu`). The Quick menus feature (formerly Quick commands) was extracted from [obsidian-config-sync](https://github.com/xooooooooox/obsidian-config-sync); the extraction spec lives in that repo.
 
 ## Commands
 
@@ -42,5 +42,5 @@ Unlike config-sync, this repo has no `template` git remote: the toolchain files 
 ## Rules
 
 - Errors must carry context (group id, item id, command id). No silent fallback — the `ribbonInternals()` null → Notice + session latch is the one sanctioned incompatibility path.
-- Grouping is desktop-only (`Platform.isDesktop`); quick commands must keep working on mobile (`isDesktopOnly: false`).
+- Grouping runs on every platform through two mechanisms — desktop/tablet via flex `order` (`applyGrouping`), phones via the observed navbar ribbon menu (`observeMenus`/`groupRibbonMenu`); quick menus must keep working on mobile (`isDesktopOnly: false`).
 - Documentation currency: when a change alters user-facing behavior (features, UI, settings, workflows), update the affected docs in the SAME branch — `README.md` and `README.zh.md` (keep the two in sync) and `docs/ARCHITECTURE.md` (code map / invariants, when structure changes). Pure internal refactors that change nothing a user sees need no doc edit. Gate: docs must be current before merging to `main` and before cutting a release.

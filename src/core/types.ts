@@ -5,7 +5,7 @@ export interface QuickCommand {
   icon: string;      // lucide id; defaults to the command's own icon; editable via the icon picker
 }
 
-// A divider inserted between quick commands in the menu.
+// A divider inserted between commands in a quick menu.
 export interface QuickSeparator {
   kind: "separator";
 }

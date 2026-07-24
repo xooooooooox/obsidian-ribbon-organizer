@@ -1,4 +1,4 @@
-// Pure icon-catalog helpers for the Quick commands icon picker. Obsidian-free: the picker passes in
+// Pure icon-catalog helpers for the Quick menus icon picker. Obsidian-free: the picker passes in
 // Obsidian's built-in icon ids and iconize's loaded packs; this composes them into one choice list.
 
 export interface IconPack {

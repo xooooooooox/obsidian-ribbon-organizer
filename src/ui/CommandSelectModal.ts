@@ -1,6 +1,6 @@
 import { App, Command, FuzzySuggestModal } from "obsidian";
 
-// Fuzzy-search over every registered command; used by the Quick commands settings section to
+// Fuzzy-search over every registered command; used by the Quick menus settings section to
 // add an entry.
 export class CommandSelectModal extends FuzzySuggestModal<Command> {
   constructor(app: App, private onChoose: (cmd: Command) => void) {

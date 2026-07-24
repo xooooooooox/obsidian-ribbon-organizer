@@ -314,7 +314,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
       new Notice("Ribbon Organizer: could not write to the clipboard.");
       return;
     }
-    new Notice("Ribbon diagnostics copied to clipboard.");
+    new Notice("Ribbon Organizer: diagnostics copied to clipboard.");
   }
 
   // Re-applies when icons are added/removed (late-loading plugins, plugins rebuilding their own
@@ -369,7 +369,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
     }).commands;
     const entries = quickMenuEntries(quickMenu.entries, (id) => id in commands.commands);
     if (entries.length === 0) {
-      menu.addItem((i) => i.setTitle("No commands configured — add them in the plugin settings").setDisabled(true));
+      menu.addItem((i) => i.setTitle("No commands configured — add them in Ribbon Organizer settings").setDisabled(true));
     }
     for (const e of entries) {
       if (e.kind === "separator") {
