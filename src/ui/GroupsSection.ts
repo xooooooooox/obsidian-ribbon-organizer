@@ -9,6 +9,7 @@ import {
   renameGroup,
 } from "../core/ribbonGroups";
 import { renderIcon } from "./iconRender";
+import { withScrollPreserved } from "./scrollKeep";
 import type RibbonOrganizerPlugin from "../main";
 import type { RibbonSnapshotItem } from "../main";
 
@@ -20,7 +21,7 @@ type DragPayload =
 // group header rows mark where dividers render, item rows drag within/across groups, the
 // ungrouped sentinel is the default landing bucket. One instance lives on the SettingTab so
 // the filter text survives re-renders; after every edit the section re-renders itself into
-// its own container (the outer settings scroller is untouched, so scroll position holds).
+// its own container, with the outer scroller's position carried across the rebuild.
 export class GroupsSection {
   private filterQuery = "";
   private expanded = new Set<string>(); // group ids; empty = all collapsed (session-only, like filterQuery)
@@ -35,6 +36,10 @@ export class GroupsSection {
 
   render(containerEl: HTMLElement): void {
     this.containerEl = containerEl;
+    withScrollPreserved(containerEl, () => this.renderContent(containerEl));
+  }
+
+  private renderContent(containerEl: HTMLElement): void {
     containerEl.empty();
     containerEl.createDiv({
       cls: "ribbon-organizer-tab-desc",
@@ -174,7 +179,6 @@ export class GroupsSection {
     if (live !== undefined) renderIcon(iconEl, live.icon, undefined, this.app);
     else setIcon(iconEl, "help");
     row.createSpan({ cls: "ribbon-organizer-rg-title", text: live?.title ?? itemId });
-    if (live?.hidden === true) row.createSpan({ cls: "ribbon-organizer-rg-hiddenchip", text: "hidden" });
     if (live === undefined) row.createSpan({ cls: "ribbon-organizer-rg-missing", text: "Not on this device" });
     row.createSpan({ cls: "ribbon-organizer-rg-plugin", text: itemId.split(":")[0] ?? "" });
     const btns = row.createDiv({ cls: "ribbon-organizer-rg-btns" });

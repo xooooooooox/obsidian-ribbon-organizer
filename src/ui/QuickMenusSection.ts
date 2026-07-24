@@ -4,6 +4,7 @@ import { QuickEntry, QuickMenu, isSeparator } from "../core/types";
 import { CommandSelectModal } from "./CommandSelectModal";
 import { IconSelectModal } from "./IconSelectModal";
 import { renderIcon } from "./iconRender";
+import { withScrollPreserved } from "./scrollKeep";
 import type RibbonOrganizerPlugin from "../main";
 
 // "Quick commands" settings section: one collapsible section per menu (same collapse pattern
@@ -23,6 +24,10 @@ export class QuickMenusSection {
 
   render(containerEl: HTMLElement): void {
     this.containerEl = containerEl;
+    withScrollPreserved(containerEl, () => this.renderContent(containerEl));
+  }
+
+  private renderContent(containerEl: HTMLElement): void {
     containerEl.empty();
     containerEl.createDiv({
       cls: "ribbon-organizer-tab-desc",

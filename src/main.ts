@@ -1,4 +1,4 @@
-import { addIcon, App, Menu, Notice, Plugin } from "obsidian";
+import { addIcon, App, Menu, Notice, Platform, Plugin } from "obsidian";
 import { CmdrHideLists, cmdrHideStyleText, withTitle } from "./core/commanderHide";
 import { BRAND_ICON_ID, BRAND_ICON_SVG } from "./core/icons";
 import { quickMenuEntries } from "./core/quickCommands";
@@ -90,29 +90,33 @@ export default class RibbonOrganizerPlugin extends Plugin {
   private menuIcons: { name: string; el: HTMLElement }[] = [];
   private ribbonObserver: MutationObserver | null = null;
   private groupingDisabled = false;
-  private mobileNavbarWrapped: { navbar: { showRibbonMenu: (evt: Event) => void }; original: (evt: Event) => void } | null = null;
+  private menuObserver: MutationObserver | null = null;
+  private lastMenuOutcome = "not-run"; // surfaced by the diagnostics command
 
   async onload(): Promise<void> {
     await this.loadSettings();
     addIcon(BRAND_ICON_ID, BRAND_ICON_SVG);
     this.syncRibbonMenus();
     this.addSettingTab(new RibbonOrganizerSettingTab(this.app, this));
+    this.addCommand({
+      id: "copy-ribbon-diagnostics",
+      name: "Copy ribbon diagnostics",
+      callback: () => void this.copyDiagnostics(),
+    });
     this.app.workspace.onLayoutReady(() => {
       this.applyGrouping();
-      this.wrapMobileRibbonMenu();
+      this.observeMenus();
     });
   }
 
   onunload(): void {
     this.ribbonObserver?.disconnect();
     this.ribbonObserver = null;
-    if (this.mobileNavbarWrapped !== null) {
-      this.mobileNavbarWrapped.navbar.showRibbonMenu = this.mobileNavbarWrapped.original;
-      this.mobileNavbarWrapped = null;
-    }
+    this.menuObserver?.disconnect();
+    this.menuObserver = null;
     const internals = ribbonInternals(this.app);
     if (internals === null) return;
-    for (const item of internals.items) item.buttonEl.style.order = "";
+    for (const item of internals.items) item.buttonEl.setCssStyles({ order: "" });
     for (const el of Array.from(internals.ribbonItemsEl.querySelectorAll(":scope > .ribbon-organizer-divider"))) el.remove();
   }
 
@@ -164,11 +168,11 @@ export default class RibbonOrganizerPlugin extends Plugin {
     );
     for (const item of internals.items) {
       const order = layout.orders.get(item.id);
-      item.buttonEl.style.order = order === undefined ? "" : String(order);
+      item.buttonEl.setCssStyles({ order: order === undefined ? "" : String(order) });
     }
     for (const el of Array.from(internals.ribbonItemsEl.querySelectorAll(":scope > .ribbon-organizer-divider"))) el.remove();
     for (const dividerOrder of layout.dividerOrders) {
-      internals.ribbonItemsEl.createDiv({ cls: "ribbon-organizer-divider" }).style.order = String(dividerOrder);
+      internals.ribbonItemsEl.createDiv({ cls: "ribbon-organizer-divider" }).setCssStyles({ order: String(dividerOrder) });
     }
     this.observeRibbon(internals.ribbonItemsEl);
   }
@@ -205,44 +209,68 @@ export default class RibbonOrganizerPlugin extends Plugin {
     rebuildCmdrStyle(access.plugin.settings.hide);
   }
 
-  // Phone surface: the navbar ≡ button REBUILDS a standard Menu from leftRibbon.items on every
-  // open, in array order, skipping natively hidden items — flex order does not apply to it.
-  // Wrap it and regroup the freshly built menu in the same task: the browser has not painted
-  // yet, so the reorder is invisible. Absent on desktop; missing internals leave native behavior.
-  private wrapMobileRibbonMenu(): void {
-    const navbar = (this.app as unknown as { mobileNavbar?: { showRibbonMenu?: unknown } }).mobileNavbar;
-    if (navbar === undefined || navbar === null || typeof navbar.showRibbonMenu !== "function") return;
-    const target = navbar as { showRibbonMenu: (evt: Event) => void };
-    const original = target.showRibbonMenu;
-    this.mobileNavbarWrapped = { navbar: target, original };
-    target.showRibbonMenu = (evt: Event): void => {
-      original.call(target, evt);
-      this.groupRibbonMenu();
-    };
+  // Phone surface: the navbar ≡ button rebuilds a standard Menu from leftRibbon.items on every
+  // open (array order, natively hidden items skipped) and appends it directly to document.body.
+  // Property-wrapping mobileNavbar.showRibbonMenu never intercepts real taps — the navbar's
+  // click listener captured a bound reference at construction — so the menu is caught at DOM
+  // insertion instead: Menu.showAtPosition adds has-active-menu to its parent element (the ≡
+  // span) before appending, which identifies the ribbon menu among all menus. The callback runs
+  // at the microtask checkpoint, pre-paint, so the reorder is invisible; it only mutates nodes
+  // inside the menu element, never body's child list, so it cannot retrigger itself.
+  private observeMenus(): void {
+    if (!Platform.isMobile) return;
+    this.menuObserver = new MutationObserver((mutations) => {
+      for (const mutation of mutations) {
+        for (const node of Array.from(mutation.addedNodes)) {
+          if (node.instanceOf(HTMLElement) && node.classList.contains("menu") && this.isRibbonMenuTrigger()) {
+            this.groupRibbonMenu(node);
+          }
+        }
+      }
+    });
+    this.menuObserver.observe(document.body, { childList: true });
+  }
+
+  // True while the navbar ≡ button is the active menu's parent (covers tap, long-press, and the
+  // long-press menu when mobileQuickRibbonItem is configured).
+  private isRibbonMenuTrigger(): boolean {
+    const navbar = (this.app as unknown as { mobileNavbar?: { ribbonMenuItemEl?: unknown } }).mobileNavbar;
+    if (navbar === undefined || navbar === null || !(navbar.ribbonMenuItemEl instanceof HTMLElement)) return false;
+    return navbar.ribbonMenuItemEl.classList.contains("has-active-menu");
   }
 
   // Row↔item mapping is index alignment: one .menu-item per non-natively-hidden item, in items
-  // order. On any mismatch (Obsidian changed the menu shape) the menu is left untouched —
-  // native order, degraded but correct. Commander's CSS hide targets side-dock-ribbon-action
-  // elements and misses these rows, so Commander-hidden titles are dropped here explicitly.
-  private groupRibbonMenu(): void {
+  // order (verified against Obsidian's showRibbonMenu source: it skips hidden items). On any
+  // mismatch the menu is left untouched — native order, degraded but correct. Commander's CSS
+  // hide targets side-dock-ribbon-action elements and misses these rows, so Commander-hidden
+  // titles are dropped here explicitly. Every exit records lastMenuOutcome for diagnostics.
+  private groupRibbonMenu(menuEl: HTMLElement): void {
     const internals = ribbonInternals(this.app);
-    if (internals === null) return;
-    const menus = document.body.querySelectorAll(".menu");
-    const menuEl = menus[menus.length - 1];
-    if (menuEl === undefined) return;
+    if (internals === null) {
+      this.lastMenuOutcome = "no-internals";
+      return;
+    }
     const rowEls = Array.from(menuEl.querySelectorAll(".menu-item"));
     const nativeVisible = internals.items.filter((i) => !i.hidden);
-    if (rowEls.length !== nativeVisible.length || rowEls.length === 0) return;
+    if (rowEls.length !== nativeVisible.length || rowEls.length === 0) {
+      this.lastMenuOutcome = `bail: ${rowEls.length} rows vs ${nativeVisible.length} visible`;
+      return;
+    }
     const container = rowEls[0]?.parentElement;
-    if (container === null || container === undefined) return;
+    if (container === null || container === undefined) {
+      this.lastMenuOutcome = "bail: no row container";
+      return;
+    }
     const cmdrHidden = this.cmdrHiddenTitles();
     const rowById = new Map<string, Element>();
+    let dropped = 0;
     nativeVisible.forEach((item, i) => {
       const row = rowEls[i];
       if (row === undefined) return;
-      if (cmdrHidden.has(item.title)) row.remove();
-      else rowById.set(item.id, row);
+      if (cmdrHidden.has(item.title)) {
+        row.remove();
+        dropped += 1;
+      } else rowById.set(item.id, row);
     });
     const effective = internals.items.map((i) => ({ id: i.id, hidden: i.hidden || cmdrHidden.has(i.title) }));
     for (const menuRow of computeMenuRows(this.settings.groups, effective)) {
@@ -257,6 +285,36 @@ export default class RibbonOrganizerPlugin extends Plugin {
       const iconEl = el.querySelector(".menu-item-icon");
       if (quickMenu !== undefined && iconEl instanceof HTMLElement) renderIcon(iconEl, quickMenu.icon, undefined, this.app);
     }
+    this.lastMenuOutcome = `grouped: ${rowEls.length} rows, ${dropped} dropped`;
+  }
+
+  // On-device verification loop: iOS has no console, so the state needed to debug the phone
+  // ribbon menu is exported through the clipboard instead. Failure surfaces as a Notice plus
+  // console.error — never silently.
+  private async copyDiagnostics(): Promise<void> {
+    const navbar = (this.app as unknown as { mobileNavbar?: { ribbonMenuItemEl?: unknown } }).mobileNavbar;
+    const internals = ribbonInternals(this.app);
+    const cmdrHidden = this.cmdrHiddenTitles();
+    const diagnostics = {
+      version: this.manifest.version,
+      platform: { isMobile: Platform.isMobile, isPhone: Platform.isPhone, isTablet: Platform.isTablet },
+      mobileNavbar: navbar !== undefined && navbar !== null,
+      ribbonMenuItemEl: navbar !== undefined && navbar !== null && navbar.ribbonMenuItemEl instanceof HTMLElement,
+      menuObserverAttached: this.menuObserver !== null,
+      items:
+        internals === null
+          ? null
+          : internals.items.map((i) => ({ id: i.id, nativeHidden: i.hidden, cmdrHidden: cmdrHidden.has(i.title) })),
+      lastMenuOutcome: this.lastMenuOutcome,
+    };
+    try {
+      await navigator.clipboard.writeText(JSON.stringify(diagnostics, null, 2));
+    } catch (error) {
+      console.error("Ribbon Organizer: clipboard write failed", error);
+      new Notice("Ribbon Organizer: could not write to the clipboard.");
+      return;
+    }
+    new Notice("Ribbon diagnostics copied to clipboard.");
   }
 
   // Re-applies when icons are added/removed (late-loading plugins, plugins rebuilding their own

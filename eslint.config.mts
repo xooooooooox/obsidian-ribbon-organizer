@@ -53,15 +53,4 @@ export default defineConfig(
 			'@typescript-eslint/no-deprecated': 'off',
 		},
 	},
-	{
-		// applyGrouping() drives the left ribbon's flex `order` per icon from user-configured,
-		// runtime-computed group layout (computeRibbonLayout) — values CSS cannot express
-		// since they depend on settings data, not a fixed visual state. onunload() resets the
-		// same property to restore native ribbon order. eslint-comments/no-restricted-disable
-		// forbids an inline disable, so the rule is scoped off for this file instead.
-		files: ['src/main.ts'],
-		rules: {
-			'obsidianmd/no-static-styles-assignment': 'off',
-		},
-	},
 );
