@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-ribbon-organizer",
-	"version": "0.7.0",
+	"version": "0.8.0",
 	"description": "Group your ribbon and launch commands from a configurable ribbon menu",
 	"main": "main.js",
 	"type": "module",
