@@ -26,7 +26,7 @@ interface RibbonInternalItem {
   title: string;
   icon: string;
   hidden: boolean;
-  buttonEl: HTMLElement;
+  buttonEl: HTMLElement | null; // null = registered but unmounted (owner plugin currently disabled)
 }
 
 interface RibbonInternals {
@@ -44,13 +44,19 @@ function ribbonInternals(app: App): RibbonInternals | null {
   const items: RibbonInternalItem[] = [];
   for (const raw of ribbon.items) {
     const it = raw as { id?: unknown; title?: unknown; icon?: unknown; hidden?: unknown; buttonEl?: unknown };
-    if (typeof it.id !== "string" || !(it.buttonEl instanceof HTMLElement)) return null;
+    if (typeof it.id !== "string") return null;
+    // Obsidian's removeRibbonAction (plugin unload) deletes buttonEl but KEEPS the entry so its
+    // hidden/order state survives a re-enable — an entry without buttonEl is a normal state
+    // (Obsidian's own ribbon context menu skips such entries), not a shape change. Only a
+    // buttonEl that is present but not an element means the internals really moved.
+    const buttonEl = it.buttonEl ?? null;
+    if (buttonEl !== null && !(buttonEl instanceof HTMLElement)) return null;
     items.push({
       id: it.id,
       title: typeof it.title === "string" ? it.title : it.id,
       icon: typeof it.icon === "string" ? it.icon : "",
       hidden: it.hidden === true,
-      buttonEl: it.buttonEl,
+      buttonEl,
     });
   }
   return { items, ribbonItemsEl: ribbon.ribbonItemsEl };
@@ -116,7 +122,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
     this.menuObserver = null;
     const internals = ribbonInternals(this.app);
     if (internals === null) return;
-    for (const item of internals.items) item.buttonEl.setCssStyles({ order: "" });
+    for (const item of internals.items) item.buttonEl?.setCssStyles({ order: "" });
     for (const el of Array.from(internals.ribbonItemsEl.querySelectorAll(":scope > .ribbon-organizer-divider"))) el.remove();
   }
 
@@ -144,8 +150,11 @@ export default class RibbonOrganizerPlugin extends Plugin {
     const internals = ribbonInternals(this.app);
     if (internals === null) return null;
     const cmdrHidden = this.cmdrHiddenTitles();
-    // hidden is the EFFECTIVE state: Obsidian's native flag OR Commander's title list.
-    return internals.items.map(({ id, title, icon, hidden }) => ({ id, title, icon, hidden: hidden || cmdrHidden.has(title) }));
+    // hidden is the EFFECTIVE state: Obsidian's native flag OR Commander's title list. Unmounted
+    // entries (owner plugin disabled) are not live icons — skipped, like Obsidian's own menus.
+    return internals.items
+      .filter((i) => i.buttonEl !== null)
+      .map(({ id, title, icon, hidden }) => ({ id, title, icon, hidden: hidden || cmdrHidden.has(title) }));
   }
 
   // Applies the configured grouping to the desktop left ribbon: flex order per icon plus one
@@ -162,11 +171,14 @@ export default class RibbonOrganizerPlugin extends Plugin {
     // Disconnect while we write so our own DOM edits cannot re-trigger the observer.
     this.ribbonObserver?.disconnect();
     const cmdrHidden = this.cmdrHiddenTitles();
+    // An unmounted entry has no element to order, so it counts as hidden for the layout: it
+    // gets no divider slot and cannot make a group visible.
     const layout = computeRibbonLayout(
       this.settings.groups,
-      internals.items.map((i) => ({ id: i.id, hidden: i.hidden || cmdrHidden.has(i.title) }))
+      internals.items.map((i) => ({ id: i.id, hidden: i.hidden || cmdrHidden.has(i.title) || i.buttonEl === null }))
     );
     for (const item of internals.items) {
+      if (item.buttonEl === null) continue;
       const order = layout.orders.get(item.id);
       item.buttonEl.setCssStyles({ order: order === undefined ? "" : String(order) });
     }
