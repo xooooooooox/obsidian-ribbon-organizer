@@ -110,3 +110,79 @@
 /* The plugin badge is the row's auto-margin carrier on desktop; with it display-none on phones
  * the buttons take over right-alignment. */
 .is-phone .ribbon-organizer-rg-item .ribbon-organizer-rg-btns { margin-left: auto; }
+
+/* ---------- Status bar tab ---------- */
+.ribbon-organizer-sb-list { display: flex; flex-direction: column; border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m); overflow: hidden; }
+.ribbon-organizer-sb-item { display: flex; align-items: center; gap: 8px; padding: 5px 10px;
+  border-bottom: 1px solid var(--background-modifier-border); }
+.ribbon-organizer-sb-item:last-child { border-bottom: none; }
+.ribbon-organizer-sb-item.is-missing { opacity: 0.55; }
+.ribbon-organizer-sb-item.is-drop-target { box-shadow: inset 0 2px 0 var(--interactive-accent); }
+.ribbon-organizer-sb-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ribbon-organizer-sb-ordinal { color: var(--text-faint); font-size: var(--font-ui-smaller); }
+.ribbon-organizer-sb-preview { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+  white-space: nowrap; max-width: 40%; color: var(--text-faint); font-size: var(--font-ui-smaller); }
+.ribbon-organizer-sb-missing { margin-left: auto; color: var(--text-faint); font-size: var(--font-ui-smaller); font-style: italic; }
+/* The rg-plugin chip carries a global margin-left:auto; inside sb rows that would split the
+   free space with the preview's auto margin and strand the preview mid-row. Turn it off here,
+   then restore it for rows where the chip is the only right-side element (no preview/tag). */
+.ribbon-organizer-sb-item .ribbon-organizer-rg-plugin { margin-left: 0; }
+.ribbon-organizer-sb-title + .ribbon-organizer-rg-plugin { margin-left: auto; }
+.ribbon-organizer-sb-hint { margin-top: 8px; color: var(--text-faint); font-size: var(--font-ui-smaller); }
+.ribbon-organizer-sb-hint.is-drop-target { box-shadow: inset 0 2px 0 var(--interactive-accent); }
+.is-phone .ribbon-organizer-sb-item .ribbon-organizer-rg-plugin,
+.is-phone .ribbon-organizer-sb-preview { display: none; }
+
+/* ============================================================
+ * Mobile status bar pill — gated on body.ribbon-organizer-mobile-sb,
+ * added by main.ts only when Platform.isMobile AND the "Show on
+ * phones and tablets" toggle is on. A floating pill above the navbar
+ * that behaves like native bottom chrome: hides while scrolling
+ * (.is-hidden-nav) and while typing (.cm-focused), floats back idle.
+ *
+ * Clearance = Obsidian's live --mobile-toolbar-height + a gap. The
+ * navbar box already covers the home-indicator safe area, so NO
+ * safe-area-inset-bottom here — adding it double-counts and lifts the
+ * pill too high. --ribbon-organizer-sb-gap is the only knob
+ * (overridable from a user snippet; deliberately not a setting).
+ * ============================================================ */
+body.ribbon-organizer-mobile-sb.is-mobile {
+  --ribbon-organizer-sb-gap: 32px;
+  --ribbon-organizer-sb-bottom: calc(var(--mobile-toolbar-height, 52px) + var(--ribbon-organizer-sb-gap, 32px));
+}
+body.ribbon-organizer-mobile-sb.is-mobile .status-bar {
+  display: flex !important;        /* core hides the bar on mobile */
+  margin-bottom: 0 !important;     /* cancel Remotely Save's injected lift */
+  position: fixed;                 /* theme compat: some themes switch it to absolute */
+  left: auto;
+  right: var(--size-4-3, 12px);
+  bottom: var(--ribbon-organizer-sb-bottom);
+  max-width: calc(100vw - 2 * var(--size-4-3, 12px));
+  flex-wrap: wrap;                 /* any number of items */
+  justify-content: flex-end;
+  align-items: center;
+  transform: none !important;      /* theme compat: cancel hover slide-offs (AnuPpuccin) */
+  border-radius: var(--radius-m);
+  border: 1px solid var(--background-modifier-border);
+  /* fully opaque: solid base + surface tint (theme surfaces can carry alpha) */
+  background-color: var(--background-primary);
+  background-image: linear-gradient(var(--background-secondary), var(--background-secondary));
+  box-shadow: var(--shadow-s);
+  transition: transform 0.3s ease-out, opacity 0.2s ease-in-out; /* match the navbar */
+}
+/* Hide with the navbar while scrolling, and while the keyboard is up */
+body.ribbon-organizer-mobile-sb.is-mobile.is-hidden-nav .status-bar,
+body.ribbon-organizer-mobile-sb.is-mobile:has(.cm-editor.cm-focused) .status-bar {
+  transform: translateY(calc(100% + var(--ribbon-organizer-sb-bottom, 80px))) !important;
+  opacity: 0;
+}
+/* Theme compat: AnuPpuccin's floating variant adds a hover hit-area pseudo-element */
+body.ribbon-organizer-mobile-sb.anp-floating-status-bar .status-bar::before { content: none !important; }
+/* One line per item; truncate long ones (e.g. sync timestamps) */
+body.ribbon-organizer-mobile-sb.is-mobile .status-bar .status-bar-item {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 60vw;
+}

@@ -14,6 +14,7 @@ An [Obsidian](https://obsidian.md) plugin that organizes the left ribbon and lau
 - **Ribbon groups** — order the ribbon icons into named groups with a thin divider line between them; works on desktop, on the tablet drawer ribbon, and in the phone navbar ribbon menu (the ≡ button).
 - **Hide icons** — an eye toggle per icon that writes both Obsidian's native hide and [Commander](https://github.com/jsmorabito/obsidian-commander)'s hide list, so the three UIs never disagree.
 - **Quick menus** — any number of extra ribbon icons, each opening its own command list; entries carry editable labels and icons (including [Iconize](https://github.com/FlorianWoelki/obsidian-iconize) packs and the plugin's built-in `ribbon-organizer` icon) and can be grouped with separators.
+- **Status bar** — drag the status bar items into your own order (one order shared across all devices), and optionally show the status bar on phones and tablets as a floating pill above the toolbar.
 - **Diagnostics** — a "Copy ribbon diagnostics" command copies a JSON snapshot to the clipboard for issue reports.
 - Configuration lives in the plugin's `data.json`, so it follows whatever vault sync you use.
 
@@ -36,6 +37,10 @@ Groups are managed from a single column mirroring the ribbon's final order: drag
 ### Hiding
 
 Hiding writes Obsidian's native hide and Commander's hide list together (when Commander is installed), and showing clears both. Caveats: Commander matches icons by title, so two same-titled icons share the hide, and renaming a hidden icon makes it visible again while leaving a stale Commander entry behind. On phones, hidden icons also disappear from the navbar ribbon menu — including icons hidden only in Commander, which Obsidian's own menu would still show.
+
+### Status bar
+
+The Status bar tab lists every status bar item; drag to reorder — the order applies live and on every device, and items a device doesn't have keep their place ("Not on this device"). Obsidian hides the status bar on mobile by default: the "Show on phones and tablets" toggle floats it above the toolbar, and it slides away while you scroll or type. Ordering applies wherever the bar is visible — the toggle, a theme, or your own CSS snippet. Items are recognized by their plugin; a plugin showing several items keeps them apart by position, which in rare cases can swap after an update of that plugin.
 
 ### Quick menus
 

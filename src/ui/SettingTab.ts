@@ -2,18 +2,21 @@ import { App, PluginSettingTab, setIcon } from "obsidian";
 import type { SettingDefinitionItem } from "obsidian";
 import { GroupsSection } from "./GroupsSection";
 import { QuickMenusSection } from "./QuickMenusSection";
+import { StatusBarSection } from "./StatusBarSection";
 import type RibbonOrganizerPlugin from "../main";
 
-type PanelTab = "groups" | "commands";
+type PanelTab = "groups" | "commands" | "statusbar";
 
 const TABS: { id: PanelTab; label: string; icon: string }[] = [
   { id: "groups", label: "Ribbon", icon: "rows-3" },
   { id: "commands", label: "Quick menus", icon: "menu" },
+  { id: "statusbar", label: "Status bar", icon: "panel-bottom" },
 ];
 
 export class RibbonOrganizerSettingTab extends PluginSettingTab {
   private groupsSection: GroupsSection;
   private quickMenusSection: QuickMenusSection;
+  private statusBarSection: StatusBarSection;
   private activeTab: PanelTab = "groups";
   private tabbedEl: HTMLElement | null = null;
 
@@ -21,6 +24,7 @@ export class RibbonOrganizerSettingTab extends PluginSettingTab {
     super(app, plugin);
     this.groupsSection = new GroupsSection(app, plugin);
     this.quickMenusSection = new QuickMenusSection(app, plugin);
+    this.statusBarSection = new StatusBarSection(app, plugin);
   }
 
   // Declarative shell (Obsidian 1.13+): one render-type definition whose name/desc/aliases
@@ -32,7 +36,7 @@ export class RibbonOrganizerSettingTab extends PluginSettingTab {
       {
         name: "Ribbon Organizer",
         desc: "Group and hide ribbon icons; launch commands from ribbon menus.",
-        aliases: ["ribbon groups", "quick menus", "quick commands", "divider", "separator", "reorder", "menu", "hide"],
+        aliases: ["ribbon groups", "quick menus", "quick commands", "divider", "separator", "reorder", "menu", "hide", "status bar", "statusbar", "mobile status bar"],
         render: (setting) => {
           setting.settingEl.empty();
           setting.settingEl.addClass("ribbon-organizer-section");
@@ -69,6 +73,7 @@ export class RibbonOrganizerSettingTab extends PluginSettingTab {
     }
     const body = containerEl.createDiv();
     if (this.activeTab === "groups") this.groupsSection.render(body);
-    else this.quickMenusSection.render(body);
+    else if (this.activeTab === "commands") this.quickMenusSection.render(body);
+    else this.statusBarSection.render(body);
   }
 }

@@ -4,13 +4,16 @@ import { BRAND_ICON_ID, BRAND_ICON_SVG } from "./core/icons";
 import { quickMenuEntries } from "./core/quickCommands";
 import { defaultMenus, normalizeMenus } from "./core/quickMenus";
 import { RibbonGroup, computeMenuRows, computeRibbonLayout, defaultGroups, normalizeGroups } from "./core/ribbonGroups";
+import { computeStatusBarOrder, deriveStatusBarIds, normalizeStatusBarOrder } from "./core/statusBarItems";
 import { QuickMenu } from "./core/types";
 import { renderIcon } from "./ui/iconRender";
 import { RibbonOrganizerSettingTab } from "./ui/SettingTab";
 
 interface RibbonOrganizerSettings {
-  menus: QuickMenu[];    // user-defined ribbon menus: one composite ribbon icon each
-  groups: RibbonGroup[]; // top-to-bottom ribbon group order (includes the ungrouped sentinel)
+  menus: QuickMenu[];             // user-defined ribbon menus: one composite ribbon icon each
+  groups: RibbonGroup[];          // top-to-bottom ribbon group order (includes the ungrouped sentinel)
+  statusBarOrder: string[];       // status bar item ids, left-to-right; [] = never reordered, bar stays native
+  statusBarShowOnMobile: boolean; // floating pill on phones/tablets (styles.css, body-class gated)
 }
 
 // A live left-ribbon icon as exposed to the settings UI.
@@ -19,6 +22,12 @@ export interface RibbonSnapshotItem {
   title: string;
   icon: string;
   hidden: boolean;
+}
+
+// A live status bar item as exposed to the settings UI: derived id + current text preview.
+export interface StatusBarSnapshotItem {
+  id: string;
+  text: string;
 }
 
 interface RibbonInternalItem {
@@ -62,6 +71,13 @@ function ribbonInternals(app: App): RibbonInternals | null {
   return { items, ribbonItemsEl: ribbon.ribbonItemsEl };
 }
 
+// Undocumented internal: app.statusBar carries only { app, containerEl } — there is no item
+// registry, so identity is derived from each element's class list (see core/statusBarItems).
+function statusBarContainer(app: App): HTMLElement | null {
+  const bar = (app as unknown as { statusBar?: { containerEl?: unknown } }).statusBar;
+  return bar !== undefined && bar !== null && bar.containerEl instanceof HTMLElement ? bar.containerEl : null;
+}
+
 interface CmdrPlugin {
   settings: { hide: CmdrHideLists };
   saveSettings: () => Promise<void>;
@@ -92,17 +108,20 @@ function rebuildCmdrStyle(hide: CmdrHideLists): void {
 }
 
 export default class RibbonOrganizerPlugin extends Plugin {
-  settings: RibbonOrganizerSettings = { menus: defaultMenus(), groups: defaultGroups() };
+  settings: RibbonOrganizerSettings = { menus: defaultMenus(), groups: defaultGroups(), statusBarOrder: [], statusBarShowOnMobile: false };
   private menuIcons: { name: string; el: HTMLElement }[] = [];
   private ribbonObserver: MutationObserver | null = null;
   private groupingDisabled = false;
   private menuObserver: MutationObserver | null = null;
   private lastMenuOutcome = "not-run"; // surfaced by the diagnostics command
+  private statusBarObserver: MutationObserver | null = null;
+  private statusBarDisabled = false;
 
   async onload(): Promise<void> {
     await this.loadSettings();
     addIcon(BRAND_ICON_ID, BRAND_ICON_SVG);
     this.syncRibbonMenus();
+    this.applyMobileStatusBarClass();
     this.addSettingTab(new RibbonOrganizerSettingTab(this.app, this));
     this.addCommand({
       id: "copy-ribbon-diagnostics",
@@ -111,6 +130,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
     });
     this.app.workspace.onLayoutReady(() => {
       this.applyGrouping();
+      this.applyStatusBarOrder();
       this.observeMenus();
     });
   }
@@ -120,6 +140,15 @@ export default class RibbonOrganizerPlugin extends Plugin {
     this.ribbonObserver = null;
     this.menuObserver?.disconnect();
     this.menuObserver = null;
+    this.statusBarObserver?.disconnect();
+    this.statusBarObserver = null;
+    document.body.removeClass("ribbon-organizer-mobile-sb");
+    const sbContainer = statusBarContainer(this.app);
+    if (sbContainer !== null) {
+      for (const el of Array.from(sbContainer.children)) {
+        if (el.instanceOf(HTMLElement) && el.classList.contains("status-bar-item")) el.setCssStyles({ order: "" });
+      }
+    }
     const internals = ribbonInternals(this.app);
     if (internals === null) return;
     for (const item of internals.items) item.buttonEl?.setCssStyles({ order: "" });
@@ -127,10 +156,18 @@ export default class RibbonOrganizerPlugin extends Plugin {
   }
 
   async loadSettings(): Promise<void> {
-    const raw = ((await this.loadData()) ?? {}) as { menus?: unknown; quickCommands?: unknown; groups?: unknown };
+    const raw = ((await this.loadData()) ?? {}) as {
+      menus?: unknown;
+      quickCommands?: unknown;
+      groups?: unknown;
+      statusBarOrder?: unknown;
+      statusBarShowOnMobile?: unknown;
+    };
     this.settings = {
       menus: normalizeMenus(raw.menus, raw.quickCommands), // pre-0.4.0 quickCommands migrates to one menu
       groups: normalizeGroups(raw.groups ?? defaultGroups()),
+      statusBarOrder: normalizeStatusBarOrder(raw.statusBarOrder),
+      statusBarShowOnMobile: raw.statusBarShowOnMobile === true,
     };
   }
 
@@ -155,6 +192,69 @@ export default class RibbonOrganizerPlugin extends Plugin {
     return internals.items
       .filter((i) => i.buttonEl !== null)
       .map(({ id, title, icon, hidden }) => ({ id, title, icon, hidden: hidden || cmdrHidden.has(title) }));
+  }
+
+  // Live .status-bar-item elements in DOM order with their derived ids; null (once per
+  // session, with a Notice) when app.statusBar no longer matches the expected shape.
+  private liveStatusBarItems(): { id: string; el: HTMLElement }[] | null {
+    if (this.statusBarDisabled) return null;
+    const container = statusBarContainer(this.app);
+    if (container === null) {
+      this.statusBarDisabled = true;
+      console.error("Ribbon Organizer: app.statusBar does not match the expected shape; status bar ordering is disabled for this session");
+      new Notice("Ribbon Organizer: status bar ordering is incompatible with this Obsidian version.");
+      return null;
+    }
+    const els = Array.from(container.children).filter(
+      (el): el is HTMLElement => el.instanceOf(HTMLElement) && el.classList.contains("status-bar-item")
+    );
+    const ids = deriveStatusBarIds(els.map((el) => Array.from(el.classList)));
+    const out: { id: string; el: HTMLElement }[] = [];
+    els.forEach((el, i) => {
+      const id = ids[i];
+      if (id !== undefined) out.push({ id, el });
+    });
+    return out;
+  }
+
+  // The settings UI's view of the live status bar (text = collapsed textContent preview).
+  statusBarSnapshot(): StatusBarSnapshotItem[] | null {
+    const live = this.liveStatusBarItems();
+    if (live === null) return null;
+    return live.map(({ id, el }) => ({ id, text: (el.textContent ?? "").replace(/\s+/g, " ").trim() }));
+  }
+
+  // Applies the stored order as inline flex order values. Strict no-op while statusBarOrder
+  // is [] (fresh installs keep a byte-for-byte native bar; a drag always persists the full
+  // row sequence, so the array never returns to [] afterwards). Idempotent.
+  applyStatusBarOrder(): void {
+    if (this.settings.statusBarOrder.length === 0) return;
+    const live = this.liveStatusBarItems();
+    if (live === null) return;
+    this.statusBarObserver?.disconnect();
+    const orders = computeStatusBarOrder(this.settings.statusBarOrder, live.map((i) => i.id));
+    for (const { id, el } of live) {
+      const order = orders.get(id);
+      el.setCssStyles({ order: order === undefined ? "" : String(order) });
+    }
+    const container = statusBarContainer(this.app);
+    if (container !== null) this.observeStatusBar(container);
+  }
+
+  // Re-applies when items are added/removed (late-loading plugins, plugins rebuilding their
+  // items). childList only, no subtree: the high-frequency text churn inside items (word
+  // count, git status) never fires this. Disconnected while applying, like observeRibbon.
+  private observeStatusBar(container: HTMLElement): void {
+    if (this.statusBarObserver === null) {
+      this.statusBarObserver = new MutationObserver(() => this.applyStatusBarOrder());
+    }
+    this.statusBarObserver.observe(container, { childList: true });
+  }
+
+  // The mobile pill styles in styles.css are gated on this body class; desktop never gets
+  // it even when the synced setting is on.
+  applyMobileStatusBarClass(): void {
+    document.body.toggleClass("ribbon-organizer-mobile-sb", Platform.isMobile && this.settings.statusBarShowOnMobile);
   }
 
   // Applies the configured grouping to the desktop left ribbon: flex order per icon plus one

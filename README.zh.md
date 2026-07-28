@@ -14,6 +14,7 @@
 - **Ribbon 分组** —— 把 ribbon 图标编排进命名分组,相邻非空分组之间渲染一条细分隔线;桌面端、平板抽屉式 ribbon、手机导航栏 ribbon 菜单(≡ 按钮)全部支持。
 - **隐藏图标** —— 每个图标一个眼睛开关,同时写入 Obsidian 原生隐藏和 [Commander](https://github.com/jsmorabito/obsidian-commander) 的隐藏列表,三处 UI 永远保持一致。
 - **Quick menus** —— 任意数量的额外 ribbon 图标,每个点开各自的命令列表;条目可设置标签和图标(支持 [Iconize](https://github.com/FlorianWoelki/obsidian-iconize) 图标包与插件自带的 `ribbon-organizer` 图标),并可用分隔线分组。
+- **状态栏** — 拖拽调整状态栏条目的顺序(所有设备共用一份顺序);还可选择在手机和平板上以浮动胶囊的形式显示状态栏。
 - **诊断** —— "Copy ribbon diagnostics" 命令把 JSON 快照复制到剪贴板,反馈问题时使用。
 - 配置保存在插件的 `data.json` 中,随你现有的 vault 同步方案一起漫游。
 
@@ -36,6 +37,10 @@
 ### 隐藏
 
 隐藏时会同时写入 Obsidian 原生隐藏和 Commander 的隐藏列表(如果安装了 Commander),取消隐藏时两者一起清除。注意:Commander 按标题匹配图标,两个同名图标会共享隐藏状态;重命名一个已隐藏的图标会让它重新显示,并在 Commander 列表中留下一条失效的旧记录。在手机上,隐藏的图标也会从导航栏 ribbon 菜单中消失——包括仅在 Commander 中隐藏的图标,Obsidian 自带菜单原本仍会显示它们。
+
+### 状态栏
+
+「Status bar」标签页列出所有状态栏条目,拖拽即可排序——顺序即时生效并同步到所有设备,本设备没有的条目保留原位(显示「Not on this device」)。Obsidian 在移动端默认隐藏状态栏:打开「Show on phones and tablets」开关后,状态栏会浮动在工具栏上方,滚动或输入时自动滑出屏幕。排序作用于任何让状态栏可见的方式——该开关、主题或你自己的 CSS 代码片段。条目按所属插件识别;同一插件的多个条目按位置区分,极少数情况下在该插件更新后可能互换。
 
 ### Quick menus
 
