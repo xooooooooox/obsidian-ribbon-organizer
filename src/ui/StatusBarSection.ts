@@ -124,7 +124,7 @@ export class StatusBarSection {
     if (live?.hidden === true) row.addClass("is-hidden");
     const grip = row.createSpan({ cls: pinned ? "ribbon-organizer-sb-lock" : "ribbon-organizer-rg-grip" });
     setIcon(grip, live === undefined ? "help" : pinned ? "lock" : "grip-vertical");
-    const title = row.createSpan({ cls: "ribbon-organizer-sb-title", text: this.displayName(key) });
+    const title = row.createSpan({ cls: "ribbon-organizer-sb-title", text: this.displayName(key, liveEl) });
     if ((keyCounts.get(key) ?? 0) > 1) title.createSpan({ cls: "ribbon-organizer-sb-ordinal", text: ` · ${String(index + 1)}` });
     if (live === undefined) row.createSpan({ cls: "ribbon-organizer-sb-missing", text: "Not on this device" });
     else if (pinned) row.createSpan({ cls: "ribbon-organizer-sb-pintag", text: "Keeps its own position" });
@@ -138,7 +138,7 @@ export class StatusBarSection {
           .setIcon("wand-2")
           .setTooltip("Rewrite rules")
           .onClick(() => {
-            new StatusBarItemModal(this.app, this.plugin, id, this.displayName(key), () => {
+            new StatusBarItemModal(this.app, this.plugin, id, this.displayName(key, liveEl), () => {
               if (this.containerEl !== null) this.render(this.containerEl);
             }).open();
           });
@@ -206,10 +206,15 @@ export class StatusBarSection {
     });
   }
 
-  private displayName(key: string): string {
+  private displayName(key: string, liveEl?: HTMLElement): string {
     const manifests = (this.app as unknown as { plugins?: { manifests?: Record<string, { name?: unknown }> } }).plugins?.manifests;
     const name = manifests?.[key]?.name;
-    return typeof name === "string" ? name : fallbackItemName(key);
+    if (typeof name === "string") return name;
+    // Fallback-keyed items (no plugin-<id> class — Commander macros, generic-class ids): the
+    // element's own accessible name ("Change vault") beats a humanized class string
+    // ("Clickable icon").
+    const aria = liveEl?.getAttribute("aria-label")?.trim() ?? "";
+    return aria !== "" ? aria : fallbackItemName(key);
   }
 
   private wireDrop(el: HTMLElement, onDrop: (draggedId: string) => void): void {
