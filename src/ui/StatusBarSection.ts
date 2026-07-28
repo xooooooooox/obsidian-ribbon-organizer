@@ -2,6 +2,7 @@ import { App, ExtraButtonComponent, Setting, setIcon } from "obsidian";
 import { fallbackItemName, splitStatusBarId, statusBarRowIds } from "../core/statusBarItems";
 import { withScrollPreserved } from "./scrollKeep";
 import { StatusBarItemModal } from "./StatusBarItemModal";
+import { MODE_ICON, MODE_NAME, MODE_NEXT } from "./statusBarMode";
 import type RibbonOrganizerPlugin from "../main";
 import type { StatusBarSnapshotItem } from "../main";
 
@@ -144,9 +145,6 @@ export class StatusBarSection {
           });
         wand.extraSettingsEl.toggleClass("is-rules-on", live.ruleCount > 0);
       }
-      const MODE_NEXT = { full: "compact", compact: "icon", icon: "full" } as const;
-      const MODE_ICON = { full: "text", compact: "ellipsis", icon: "circle-dot" } as const;
-      const MODE_NAME = { full: "Full", compact: "Compact", icon: "Icon only" } as const;
       const modeBtn = new ExtraButtonComponent(btns)
         .setIcon(MODE_ICON[live.mode])
         .setTooltip(MODE_NAME[live.mode])

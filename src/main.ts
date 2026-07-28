@@ -10,6 +10,8 @@ import { QuickMenu } from "./core/types";
 import { renderIcon } from "./ui/iconRender";
 import { RibbonOrganizerSettingTab } from "./ui/SettingTab";
 
+const SEEN_STORAGE_KEY = "ribbon-organizer-status-bar-seen";
+
 interface RibbonOrganizerSettings {
   menus: QuickMenu[];             // user-defined ribbon menus: one composite ribbon icon each
   groups: RibbonGroup[];          // top-to-bottom ribbon group order (includes the ungrouped sentinel)
@@ -18,7 +20,6 @@ interface RibbonOrganizerSettings {
   statusBarShowOnMobile: boolean; // floating pill on phones/tablets (styles.css, body-class gated)
   statusBarModes: Record<string, "compact" | "icon">; // absent id = Full (not stored)
   statusBarRules: Record<string, StatusBarRule[]>;    // per-item text rewrite templates
-  statusBarSeen: Record<string, string[]>;            // learned raw status texts (cap 8, LRU newest-last)
 }
 
 // A live left-ribbon icon as exposed to the settings UI.
@@ -128,7 +129,6 @@ export default class RibbonOrganizerPlugin extends Plugin {
     statusBarShowOnMobile: false,
     statusBarModes: {},
     statusBarRules: {},
-    statusBarSeen: {},
   };
   private menuIcons: { name: string; el: HTMLElement }[] = [];
   private ribbonObserver: MutationObserver | null = null;
@@ -144,7 +144,14 @@ export default class RibbonOrganizerPlugin extends Plugin {
   // equals `written` is our own write (skip — kills observer loops and oscillating rules);
   // restore paths put `original` back while `written` still stands.
   private statusBarNodeMemo = new WeakMap<Text, { original: string; written: string; iconEl?: HTMLElement }>();
+  // Per host element: the inline color found before the first rule text-tint (restored when
+  // the tint lifts) and the tint value we last wrote (the skip-guard for redundant writes).
+  private statusBarHostColor = new WeakMap<HTMLElement, { prior: string; written: string }>();
   private statusBarSeenTimer: number | null = null;
+  // Learned raw status texts (cap 8, LRU newest-last). Device-local by definition ("seen on
+  // this device") — stored via app.saveLocalStorage, never in data.json, which syncs across
+  // machines and would churn on every relative-time status tick.
+  statusBarSeen: Record<string, string[]> = {};
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -175,6 +182,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
     if (this.statusBarSeenTimer !== null) {
       window.clearTimeout(this.statusBarSeenTimer);
       this.statusBarSeenTimer = null;
+      this.app.saveLocalStorage(SEEN_STORAGE_KEY, this.statusBarSeen);
     }
     for (const { obs, el } of this.statusBarRuleObservers.values()) {
       obs.disconnect();
@@ -217,8 +225,18 @@ export default class RibbonOrganizerPlugin extends Plugin {
       statusBarShowOnMobile: raw.statusBarShowOnMobile === true,
       statusBarModes: normalizeStatusBarModes(raw.statusBarModes),
       statusBarRules: normalizeStatusBarRules(raw.statusBarRules),
-      statusBarSeen: normalizeStatusBarSeen(raw.statusBarSeen),
     };
+    this.statusBarSeen = normalizeStatusBarSeen(this.app.loadLocalStorage(SEEN_STORAGE_KEY));
+    // One-time migration: pre-0.13 kept seen states in data.json. Move them to device
+    // storage (entries already on this device win) and scrub the field with a single save.
+    if (raw.statusBarSeen !== undefined) {
+      const legacy = normalizeStatusBarSeen(raw.statusBarSeen);
+      for (const [id, list] of Object.entries(legacy)) {
+        if (this.statusBarSeen[id] === undefined) this.statusBarSeen[id] = list;
+      }
+      this.app.saveLocalStorage(SEEN_STORAGE_KEY, this.statusBarSeen);
+      await this.saveSettings();
+    }
   }
 
   async saveSettings(): Promise<void> {
@@ -310,7 +328,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
         shown: el.offsetWidth > 0 && style.display !== "none" && style.opacity !== "0",
         mode: this.settings.statusBarModes[id] ?? "full",
         ruleCount: rules.length,
-        hasText: raw !== "" || rules.length > 0 || (this.settings.statusBarSeen[id] ?? []).length > 0,
+        hasText: raw !== "" || rules.length > 0 || (this.statusBarSeen[id] ?? []).length > 0,
       };
     });
   }
@@ -406,10 +424,12 @@ export default class RibbonOrganizerPlugin extends Plugin {
   // touch; everything else stays text-node-scoped. Fail-open: unmatched nodes untouched.
   // A node whose rules stopped producing output is restored here in place (the observer
   // teardown only restores when an item loses ALL rules), so icon edits and rule deletions
-  // take effect without an element rebuild.
+  // take effect without an element rebuild. The first matched node's textColor also tints
+  // the host element's text via syncHostTextColor, run once at the end of every pass.
   private rewriteStatusBarItem(id: string, el: HTMLElement): void {
     const rules = this.settings.statusBarRules[id] ?? [];
     let rawFull = "";
+    let hostColor: string | null = null;
     for (const node of this.textNodesOf(el)) {
       const memo = this.statusBarNodeMemo.get(node);
       const prior = memo !== undefined && node.data === memo.written ? memo : undefined;
@@ -433,7 +453,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
         continue;
       }
       const out = applyStatusBarRules(raw, rules);
-      if (out.text === raw && out.icon === null) {
+      if (out.text === raw && out.icon === null && out.iconColor === null && out.textColor === null) {
         if (prior !== undefined) {
           prior.iconEl?.remove();
           this.statusBarNodeMemo.delete(node);
@@ -441,18 +461,27 @@ export default class RibbonOrganizerPlugin extends Plugin {
         }
         continue;
       }
-      const iconEl = this.syncRuleIconSpan(node, prior?.iconEl, out.icon, out.text === "");
+      if (hostColor === null && out.textColor !== null) hostColor = out.textColor; // first node with a colored match wins
+      const iconEl = this.syncRuleIconSpan(node, prior?.iconEl, out.icon, out.text === "", out.iconColor, out.textColor);
       if (iconEl === undefined) this.statusBarNodeMemo.set(node, { original: raw, written: out.text });
       else this.statusBarNodeMemo.set(node, { original: raw, written: out.text, iconEl });
       if (node.data !== out.text) node.data = out.text;
     }
+    this.syncHostTextColor(el, hostColor);
     if (this.settings.statusBarModes[id] === "compact") el.title = rawFull.replace(/\s+/g, " ").trim();
   }
 
   // The plugin-owned icon span for one rewritten node: created (or moved back) to sit
   // immediately before the text node, re-rendered only when the icon id changes, removed
   // when the matched rule carries no icon. Solo (empty rewritten text) drops the text gap.
-  private syncRuleIconSpan(node: Text, existing: HTMLElement | undefined, icon: string | null, solo: boolean): HTMLElement | undefined {
+  private syncRuleIconSpan(
+    node: Text,
+    existing: HTMLElement | undefined,
+    icon: string | null,
+    solo: boolean,
+    iconColor: string | null,
+    textColor: string | null
+  ): HTMLElement | undefined {
     if (icon === null) {
       existing?.remove();
       return undefined;
@@ -464,21 +493,49 @@ export default class RibbonOrganizerPlugin extends Plugin {
       span.setAttribute("data-ricon", icon);
     }
     span.toggleClass("ribbon-organizer-sb-ricon-solo", solo);
+    // Icon color: its own color wins; an uncolored icon under a text tint gets the bar's
+    // own color back (--status-bar-text-color) so the host tint doesn't bleed into it.
+    span.setCssStyles({ color: iconColor ?? (textColor !== null ? "var(--status-bar-text-color)" : "") });
     return span;
   }
 
-  // Seen-state learning. Only a genuinely new value schedules a (debounced) save, so
-  // high-frequency status churn never write-storms data.json.
+  // Applies or restores the item-level text tint (rules color the whole item's text: text
+  // nodes can't be styled directly, and wrapping them would break the text-nodes-only
+  // invariant). Runs once per rewrite pass, so the no-match and rules-emptied paths
+  // converge on restore without their own branches.
+  private syncHostTextColor(el: HTMLElement, color: string | null): void {
+    const memo = this.statusBarHostColor.get(el);
+    if (color !== null) {
+      // Skip-guard on the value WE wrote, not a style.color read-back: CSSOM serializes a
+      // hex write into rgb(), so read-back never string-matches the rule's literal color.
+      if (memo === undefined) {
+        this.statusBarHostColor.set(el, { prior: el.style.color, written: color });
+        el.setCssStyles({ color });
+      } else if (memo.written !== color) {
+        memo.written = color;
+        el.setCssStyles({ color });
+      }
+      return;
+    }
+    if (memo !== undefined) {
+      el.setCssStyles({ color: memo.prior });
+      this.statusBarHostColor.delete(el);
+    }
+  }
+
+  // Seen-state learning. Only a genuinely new value schedules a (debounced) flush, so
+  // high-frequency status churn never write-storms device storage — and never touches
+  // data.json at all.
   private learnStatusBarText(id: string, raw: string): void {
     const collapsed = raw.replace(/\s+/g, " ").trim();
     if (collapsed === "") return;
-    const current = this.settings.statusBarSeen[id] ?? [];
+    const current = this.statusBarSeen[id] ?? [];
     const isNew = !current.includes(collapsed);
-    this.settings.statusBarSeen[id] = pushSeen(current, collapsed, SEEN_CAP);
+    this.statusBarSeen[id] = pushSeen(current, collapsed, SEEN_CAP);
     if (isNew && this.statusBarSeenTimer === null) {
       this.statusBarSeenTimer = window.setTimeout(() => {
         this.statusBarSeenTimer = null;
-        void this.saveSettings();
+        this.app.saveLocalStorage(SEEN_STORAGE_KEY, this.statusBarSeen);
       }, 2000);
     }
   }
@@ -486,6 +543,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
   // Best-effort undo of our rewrites on one element: nodes the plugin has since overwritten
   // keep the plugin's newer text (its next update wins anyway), but our icon spans and memo
   // entries are removed unconditionally — a span must never outlive the teardown that owns it.
+  // The host text tint is restored too, so a removed or emptied rule set never leaves a stale color.
   private restoreStatusBarText(el: HTMLElement): void {
     for (const node of this.textNodesOf(el)) {
       const memo = this.statusBarNodeMemo.get(node);
@@ -494,6 +552,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
       if (node.data === memo.written) node.data = memo.original;
       this.statusBarNodeMemo.delete(node);
     }
+    this.syncHostTextColor(el, null);
   }
 
   // One observer per live item that needs text-churn tracking: rule-bearing items (rewrite

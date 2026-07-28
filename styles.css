@@ -169,7 +169,10 @@
 /* Customize modal */
 .ribbon-organizer-sbm-sec { font-size: var(--font-ui-smaller); color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin: 14px 0 6px; }
 .ribbon-organizer-sbm-modes { display: flex; gap: 6px; }
+.ribbon-organizer-sbm-pill { display: inline-flex; align-items: center; gap: 6px; }
 .ribbon-organizer-sbm-pill.is-selected { border-color: var(--interactive-accent); color: var(--text-normal); }
+.ribbon-organizer-sbm-pillicon { display: inline-flex; }
+.ribbon-organizer-sbm-pillicon svg { width: 13px; height: 13px; }
 .ribbon-organizer-sbm-seen { display: flex; flex-direction: column; gap: 4px; }
 .ribbon-organizer-sbm-seenrow { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ribbon-organizer-sbm-seenrow .ribbon-organizer-sbm-chip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; flex: none; }
@@ -187,10 +190,25 @@
 .ribbon-organizer-sbm-iconbtn .svg-icon { width: var(--icon-s, 16px); height: var(--icon-s, 16px); }
 .ribbon-organizer-sbm-iconclear { position: absolute; top: -6px; right: -6px; width: 14px; height: 14px; border-radius: 50%; background: var(--background-modifier-border); color: var(--text-muted); display: none; align-items: center; justify-content: center; }
 .ribbon-organizer-sbm-iconclear svg { width: 9px; height: 9px; }
-.ribbon-organizer-sbm-iconbtn:hover .ribbon-organizer-sbm-iconclear { display: inline-flex; }
+.ribbon-organizer-sbm-iconbtn:hover .ribbon-organizer-sbm-iconclear,
+.ribbon-organizer-sbm-dotbtn:hover .ribbon-organizer-sbm-iconclear { display: inline-flex; }
 .ribbon-organizer-sbm-arrow { color: var(--text-faint); flex: none; }
 .ribbon-organizer-sbm-addbar { margin-top: 8px; }
 .ribbon-organizer-sbm-note { margin-top: 12px; color: var(--text-faint); font-size: var(--font-ui-smaller); }
+
+/* Rule color dots: one for the icon, one for the text. Same three states as the icon
+ * button. The color input is the native picker trigger — visually hidden but clickable
+ * (display:none would mute programmatic .click() in some engines). */
+.ribbon-organizer-sbm-dotbtn {
+  flex: none; width: 24px; height: 24px; border-radius: 50%; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center; position: relative;
+  background: var(--background-primary); border: 1px solid var(--background-modifier-border);
+  cursor: pointer;
+}
+.ribbon-organizer-sbm-dotbtn.is-unset { border-style: dashed; }
+.ribbon-organizer-sbm-dotswatch { width: 12px; height: 12px; border-radius: 50%; }
+.ribbon-organizer-sbm-dotbtn.is-unset .ribbon-organizer-sbm-dotswatch { width: 10px; height: 10px; border: 1.5px dashed var(--text-faint); }
+.ribbon-organizer-sbm-dotinput { position: absolute; inset: 0; opacity: 0; pointer-events: none; border: none; padding: 0; }
 
 /* ============================================================
  * Mobile status bar pill — gated on body.ribbon-organizer-mobile-sb,

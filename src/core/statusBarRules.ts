@@ -2,14 +2,18 @@
 // Everything here is pure; the DOM-facing engine lives in main.ts.
 
 export interface StatusBarRule {
-  find: string;    // template: literal text with {name} placeholders for the changing parts
-  replace: string; // output text: placeholders carry the captured text over; may be ""
-  icon?: string;   // optional icon id (Obsidian built-in or iconize pack), shown before the text
+  find: string;       // template: literal text with {name} placeholders for the changing parts
+  replace: string;    // output text: placeholders carry the captured text over; may be ""
+  icon?: string;      // optional icon id (Obsidian built-in or iconize pack), shown before the text
+  iconColor?: string; // optional CSS color for the icon
+  textColor?: string; // optional CSS color for the rewritten text
 }
 
 export interface RuleResult {
   text: string;
   icon: string | null;
+  iconColor: string | null;
+  textColor: string | null;
 }
 
 const REGEX_SPECIALS = /[.*+?^${}()|[\]\\]/g;
@@ -74,9 +78,9 @@ export function applyStatusBarRules(text: string, rules: StatusBarRule[]): RuleR
       out += nameIndex === -1 ? rest.slice(open, close + 1) : (match[nameIndex + 1] ?? "");
       rest = rest.slice(close + 1);
     }
-    return { text: out, icon: icon === "" ? null : icon };
+    return { text: out, icon: icon === "" ? null : icon, iconColor: rule.iconColor ?? null, textColor: rule.textColor ?? null };
   }
-  return { text, icon: null };
+  return { text, icon: null, iconColor: null, textColor: null };
 }
 
 // Rule template from a clicked seen sample: the longest prefix (else suffix) shared with
@@ -137,8 +141,14 @@ export function normalizeStatusBarRules(raw: unknown): Record<string, StatusBarR
       const find = entryObj.find;
       const replace = entryObj.replace;
       if (typeof find === "string" && typeof replace === "string") {
+        const rule: StatusBarRule = { find, replace };
         const icon = entryObj.icon;
-        rules.push(typeof icon === "string" && icon !== "" ? { find, replace, icon } : { find, replace });
+        if (typeof icon === "string" && icon !== "") rule.icon = icon;
+        const iconColor = entryObj.iconColor;
+        if (typeof iconColor === "string" && iconColor !== "") rule.iconColor = iconColor;
+        const textColor = entryObj.textColor;
+        if (typeof textColor === "string" && textColor !== "") rule.textColor = textColor;
+        rules.push(rule);
       }
     }
     if (rules.length > 0) out[key] = rules;
