@@ -35,16 +35,18 @@ export function splitStatusBarId(id: string): { key: string; index: number } {
 }
 
 // Flex order per live id: stored ids first (ids absent from live are skipped — the CALLER
-// keeps them in the stored array), then live ids missing from stored, in live order.
-export function computeStatusBarOrder(stored: string[], live: string[]): Map<string, number> {
+// keeps them in the stored array), then live ids missing from stored, in live order. Pinned
+// ids (items whose own CSS sets a non-zero `order`, e.g. quick-explorer's left-region
+// spacer) get NO entry: overriding their self-position was the 0.9.x bar-split bug.
+export function computeStatusBarOrder(stored: string[], live: string[], pinned: Set<string>): Map<string, number> {
   const liveSet = new Set(live);
   const orders = new Map<string, number>();
   let next = 1;
   for (const id of stored) {
-    if (liveSet.has(id) && !orders.has(id)) orders.set(id, next++);
+    if (liveSet.has(id) && !pinned.has(id) && !orders.has(id)) orders.set(id, next++);
   }
   for (const id of live) {
-    if (!orders.has(id)) orders.set(id, next++);
+    if (!pinned.has(id) && !orders.has(id)) orders.set(id, next++);
   }
   return orders;
 }
@@ -74,4 +76,11 @@ export function fallbackItemName(key: string): string {
   const longest = key.split("+").reduce((a, b) => (b.length > a.length ? b : a), "");
   const words = longest.replace(/-/g, " ").trim();
   return words === "" ? "Item" : words.charAt(0).toUpperCase() + words.slice(1);
+}
+
+// When showing `shownId` has to clear Commander's plugin-level status bar hide (which would
+// reveal EVERY item of that plugin), the plugin's other live items move to the own hidden
+// list so their state survives. Returns those sibling ids.
+export function cmdrHiddenSiblings(key: string, liveIds: string[], shownId: string): string[] {
+  return liveIds.filter((id) => id !== shownId && splitStatusBarId(id).key === key);
 }

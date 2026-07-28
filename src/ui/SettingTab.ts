@@ -47,6 +47,10 @@ export class RibbonOrganizerSettingTab extends PluginSettingTab {
     ];
   }
 
+  hide(): void {
+    this.statusBarSection.teardown();
+  }
+
   // Fallback for Obsidian < 1.13.0 (minAppVersion is 1.8.7), per the official guidance:
   // "Only implement display() as a fallback for plugins that need to support Obsidian
   // versions older than 1.13.0." Renders the same tabbed panel.
@@ -58,6 +62,7 @@ export class RibbonOrganizerSettingTab extends PluginSettingTab {
   // Two tabs (same pattern as config-sync's settings panel): icon+label buttons with an
   // accent underline on the active one; switching re-renders the body in place.
   private renderTabbed(containerEl: HTMLElement): void {
+    this.statusBarSection.teardown(); // spotlight listeners live on the real status bar, not this DOM
     this.tabbedEl = containerEl;
     containerEl.empty();
     const nav = containerEl.createDiv({ cls: "ribbon-organizer-tabs" });

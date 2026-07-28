@@ -1,15 +1,20 @@
-import { App, Setting, setIcon } from "obsidian";
+import { App, ExtraButtonComponent, Setting, setIcon } from "obsidian";
 import { fallbackItemName, splitStatusBarId, statusBarRowIds } from "../core/statusBarItems";
 import { withScrollPreserved } from "./scrollKeep";
 import type RibbonOrganizerPlugin from "../main";
 import type { StatusBarSnapshotItem } from "../main";
 
-// "Status bar" settings tab: a mobile-display toggle plus a flat drag list mirroring the
-// status bar's final order. One order shared across devices: rows for ids this device
-// doesn't have stay in place ("Not on this device") so a drag here never evicts them.
+// "Status bar" settings tab: a mobile-display toggle, a clone-based preview strip, and a
+// flat drag list mirroring the status bar's final order. One order and visibility shared
+// across devices: rows for ids this device doesn't have stay in place ("Not on this
+// device"). Pinned rows (items that position themselves via their own CSS order) show a
+// lock and are neither draggable nor drop targets; the eye still works on them.
 export class StatusBarSection {
   private drag: string | null = null; // dragged row id
   private containerEl: HTMLElement | null = null;
+  // Spotlight listeners attach to FOREIGN DOM (the real status bar items); every re-render
+  // must detach the previous set and strip any lingering spot class.
+  private spotCleanups: (() => void)[] = [];
 
   constructor(
     private app: App,
@@ -21,7 +26,17 @@ export class StatusBarSection {
     withScrollPreserved(containerEl, () => this.renderContent(containerEl));
   }
 
+  // Detaches the spotlight listeners from the REAL status bar elements and strips any
+  // lingering spot class. Idempotent. Called on every re-render, on tab switches, and when
+  // the settings tab hides — the real bar outlives the settings DOM, so render-time cleanup
+  // alone would leave hover listeners toggling the accent outline during normal vault use.
+  teardown(): void {
+    for (const cleanup of this.spotCleanups) cleanup();
+    this.spotCleanups = [];
+  }
+
   private renderContent(containerEl: HTMLElement): void {
+    this.teardown();
     containerEl.empty();
     new Setting(containerEl)
       .setName("Show on phones and tablets")
@@ -35,7 +50,7 @@ export class StatusBarSection {
 
     containerEl.createDiv({
       cls: "ribbon-organizer-tab-desc",
-      text: "Drag to reorder the status bar. The same order applies on every device; items a device doesn't have are skipped there.",
+      text: "Drag to reorder the status bar; the eye hides an item everywhere. The same order and visibility apply on every device; items a device doesn't have are skipped there.",
     });
 
     const snapshot = this.plugin.statusBarSnapshot();
@@ -43,6 +58,9 @@ export class StatusBarSection {
       containerEl.createDiv({ cls: "ribbon-organizer-rg-note", text: "Status bar ordering is incompatible with this Obsidian version." });
       return;
     }
+    const liveEls = this.plugin.statusBarLiveElements();
+    const clones = this.renderStrip(containerEl, snapshot, liveEls);
+
     const liveById = new Map(snapshot.map((i) => [i.id, i]));
     const rowIds = statusBarRowIds(this.plugin.settings.statusBarOrder, snapshot.map((i) => i.id));
     // Rows sharing a key need an ordinal so two "Git" rows stay tellable apart.
@@ -52,7 +70,7 @@ export class StatusBarSection {
       keyCounts.set(key, (keyCounts.get(key) ?? 0) + 1);
     }
     const listEl = containerEl.createDiv({ cls: "ribbon-organizer-sb-list" });
-    rowIds.forEach((id) => this.renderRow(listEl, id, rowIds, liveById.get(id), keyCounts));
+    rowIds.forEach((id) => this.renderRow(listEl, id, rowIds, liveById.get(id), keyCounts, clones.get(id), liveEls.get(id)));
 
     // The hint doubles as the append drop target — insert-before alone cannot reach the end.
     const hint = containerEl.createDiv({ cls: "ribbon-organizer-sb-hint", text: "New items appear at the end." });
@@ -63,24 +81,71 @@ export class StatusBarSection {
     });
   }
 
+  // A static, pixel-faithful mirror of the bar: clones of the visible live elements carry
+  // their classes (theme/plugin CSS matches) and inline order; a pinned spacer clone keeps
+  // its own order/flex-grow, so even the left/right split previews correctly. Clones are
+  // inert: ids stripped (no duplicate DOM ids — quick-explorer nests one), listeners are
+  // not copied by cloneNode, and the strip is aria-hidden.
+  private renderStrip(
+    containerEl: HTMLElement,
+    snapshot: StatusBarSnapshotItem[],
+    liveEls: Map<string, HTMLElement>
+  ): Map<string, HTMLElement> {
+    containerEl.createDiv({ cls: "ribbon-organizer-sb-strip-label", text: "Preview · hover a row or an item to locate it" });
+    const strip = containerEl.createDiv({ cls: "status-bar ribbon-organizer-sb-strip", attr: { "aria-hidden": "true" } });
+    const clones = new Map<string, HTMLElement>();
+    for (const item of snapshot) {
+      if (item.hidden) continue;
+      const el = liveEls.get(item.id);
+      if (el === undefined) continue;
+      const clone = el.cloneNode(true) as HTMLElement;
+      clone.removeAttribute("id");
+      for (const idEl of Array.from(clone.querySelectorAll("[id]"))) idEl.removeAttribute("id");
+      strip.appendChild(clone);
+      clones.set(item.id, clone);
+    }
+    return clones;
+  }
+
   private renderRow(
     listEl: HTMLElement,
     id: string,
     rowIds: string[],
     live: StatusBarSnapshotItem | undefined,
-    keyCounts: Map<string, number>
+    keyCounts: Map<string, number>,
+    clone: HTMLElement | undefined,
+    liveEl: HTMLElement | undefined
   ): void {
     const { key, index } = splitStatusBarId(id);
-    const row = listEl.createDiv({ cls: "ribbon-organizer-sb-item", attr: { draggable: "true" } });
+    const pinned = live?.pinned === true;
+    const row = listEl.createDiv({ cls: "ribbon-organizer-sb-item", attr: pinned ? {} : { draggable: "true" } });
     if (live === undefined) row.addClass("is-missing");
-    const grip = row.createSpan({ cls: "ribbon-organizer-rg-grip" });
-    setIcon(grip, live === undefined ? "help" : "grip-vertical");
+    if (live?.hidden === true) row.addClass("is-hidden");
+    const grip = row.createSpan({ cls: pinned ? "ribbon-organizer-sb-lock" : "ribbon-organizer-rg-grip" });
+    setIcon(grip, live === undefined ? "help" : pinned ? "lock" : "grip-vertical");
     const title = row.createSpan({ cls: "ribbon-organizer-sb-title", text: this.displayName(key) });
     if ((keyCounts.get(key) ?? 0) > 1) title.createSpan({ cls: "ribbon-organizer-sb-ordinal", text: ` · ${String(index + 1)}` });
     if (live === undefined) row.createSpan({ cls: "ribbon-organizer-sb-missing", text: "Not on this device" });
+    else if (pinned) row.createSpan({ cls: "ribbon-organizer-sb-pintag", text: "Keeps its own position" });
     else if (live.text !== "") row.createSpan({ cls: "ribbon-organizer-sb-preview", text: live.text });
     row.createSpan({ cls: "ribbon-organizer-rg-plugin", text: key });
+    if (live !== undefined) {
+      const btns = row.createDiv({ cls: "ribbon-organizer-rg-btns" });
+      const eye = new ExtraButtonComponent(btns)
+        .setIcon(live.hidden ? "eye-off" : "eye")
+        .setTooltip(live.hidden ? "Show this item" : "Hide this item")
+        .onClick(() => {
+          void this.plugin.setStatusBarItemHidden(id, !live.hidden).then(() => {
+            if (this.containerEl !== null) this.render(this.containerEl);
+          });
+        });
+      eye.extraSettingsEl.toggleClass("is-eye-off", live.hidden);
+    }
 
+    // Spotlight: hidden items have no visible body, missing items no body at all.
+    if (live !== undefined && !live.hidden) this.wireSpot(row, clone, liveEl);
+
+    if (pinned) return; // pinned rows neither drag nor accept drops
     row.addEventListener("dragstart", (e) => {
       this.drag = id;
       e.dataTransfer?.setData("text/plain", ""); // some platforms refuse to start a drag without data
@@ -93,6 +158,33 @@ export class StatusBarSection {
       if (to === -1) return;
       out.splice(to, 0, draggedId);
       this.persist(out);
+    });
+  }
+
+  // Three-way hover: entering the row, its strip clone, or the real bar item highlights the
+  // other parties.
+  private wireSpot(row: HTMLElement, clone: HTMLElement | undefined, liveEl: HTMLElement | undefined): void {
+    const targets = [clone, liveEl].filter((t): t is HTMLElement => t !== undefined);
+    if (targets.length === 0) return;
+    const on = (): void => {
+      row.addClass("is-hovered");
+      for (const t of targets) t.addClass("ribbon-organizer-sb-spot");
+    };
+    const off = (): void => {
+      row.removeClass("is-hovered");
+      for (const t of targets) t.removeClass("ribbon-organizer-sb-spot");
+    };
+    const sources = [row, ...targets];
+    for (const src of sources) {
+      src.addEventListener("mouseenter", on);
+      src.addEventListener("mouseleave", off);
+    }
+    this.spotCleanups.push(() => {
+      off();
+      for (const src of sources) {
+        src.removeEventListener("mouseenter", on);
+        src.removeEventListener("mouseleave", off);
+      }
     });
   }
 

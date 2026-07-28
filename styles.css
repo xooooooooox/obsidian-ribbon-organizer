@@ -133,6 +133,21 @@
 .ribbon-organizer-sb-hint.is-drop-target { box-shadow: inset 0 2px 0 var(--interactive-accent); }
 .is-phone .ribbon-organizer-sb-item .ribbon-organizer-rg-plugin,
 .is-phone .ribbon-organizer-sb-preview { display: none; }
+.ribbon-organizer-sb-item.is-hidden .ribbon-organizer-sb-title,
+.ribbon-organizer-sb-item.is-hidden .ribbon-organizer-sb-preview { color: var(--text-faint); }
+.ribbon-organizer-sb-item.is-hovered { background: var(--background-modifier-hover); box-shadow: inset 2px 0 0 var(--interactive-accent); }
+.ribbon-organizer-sb-lock { display: inline-flex; color: var(--text-faint); --icon-size: 14px; }
+.ribbon-organizer-sb-pintag { margin-left: auto; color: var(--text-faint); font-size: var(--font-ui-smaller); font-style: italic; }
+.ribbon-organizer-sb-item .ribbon-organizer-rg-btns { flex: none; }
+.ribbon-organizer-sb-strip-label { font-size: var(--font-ui-smaller); color: var(--text-faint);
+  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+/* The strip reuses the status-bar class so theme/plugin item CSS styles the clones, then
+ * re-asserts plain in-panel layout (core hides/floats the real bar on some platforms). */
+.status-bar.ribbon-organizer-sb-strip { display: flex; position: static; width: 100%; max-width: none;
+  flex-wrap: wrap; justify-content: flex-end; align-items: center;
+  border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m);
+  background: var(--background-secondary); padding: 4px 10px; margin-bottom: 8px; transform: none; }
+.ribbon-organizer-sb-spot { outline: 1.5px solid var(--interactive-accent); outline-offset: 1px; border-radius: 3px; }
 
 /* ============================================================
  * Mobile status bar pill — gated on body.ribbon-organizer-mobile-sb,
@@ -151,7 +166,7 @@ body.ribbon-organizer-mobile-sb.is-mobile {
   --ribbon-organizer-sb-gap: 32px;
   --ribbon-organizer-sb-bottom: calc(var(--mobile-toolbar-height, 52px) + var(--ribbon-organizer-sb-gap, 32px));
 }
-body.ribbon-organizer-mobile-sb.is-mobile .status-bar {
+body.ribbon-organizer-mobile-sb.is-mobile .status-bar:not(.ribbon-organizer-sb-strip) {
   display: flex !important;        /* core hides the bar on mobile */
   margin-bottom: 0 !important;     /* cancel Remotely Save's injected lift */
   position: fixed;                 /* theme compat: some themes switch it to absolute */
@@ -172,15 +187,15 @@ body.ribbon-organizer-mobile-sb.is-mobile .status-bar {
   transition: transform 0.3s ease-out, opacity 0.2s ease-in-out; /* match the navbar */
 }
 /* Hide with the navbar while scrolling, and while the keyboard is up */
-body.ribbon-organizer-mobile-sb.is-mobile.is-hidden-nav .status-bar,
-body.ribbon-organizer-mobile-sb.is-mobile:has(.cm-editor.cm-focused) .status-bar {
+body.ribbon-organizer-mobile-sb.is-mobile.is-hidden-nav .status-bar:not(.ribbon-organizer-sb-strip),
+body.ribbon-organizer-mobile-sb.is-mobile:has(.cm-editor.cm-focused) .status-bar:not(.ribbon-organizer-sb-strip) {
   transform: translateY(calc(100% + var(--ribbon-organizer-sb-bottom, 80px))) !important;
   opacity: 0;
 }
 /* Theme compat: AnuPpuccin's floating variant adds a hover hit-area pseudo-element */
-body.ribbon-organizer-mobile-sb.anp-floating-status-bar .status-bar::before { content: none !important; }
+body.ribbon-organizer-mobile-sb.anp-floating-status-bar .status-bar:not(.ribbon-organizer-sb-strip)::before { content: none !important; }
 /* One line per item; truncate long ones (e.g. sync timestamps) */
-body.ribbon-organizer-mobile-sb.is-mobile .status-bar .status-bar-item {
+body.ribbon-organizer-mobile-sb.is-mobile .status-bar:not(.ribbon-organizer-sb-strip) .status-bar-item {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

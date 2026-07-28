@@ -6,7 +6,7 @@
 
 export interface CmdrHideLists {
   leftRibbon: string[]; // ribbon icon titles (aria-labels)
-  statusbar: string[]; // plugin ids; preserved verbatim, never edited by Ribbon Organizer
+  statusbar: string[]; // plugin ids; Ribbon Organizer removes a plugin's entry when the user shows one of its status bar items
 }
 
 export function cmdrHideStyleText(hide: CmdrHideLists): string {

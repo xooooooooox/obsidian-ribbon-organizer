@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  cmdrHiddenSiblings,
   computeStatusBarOrder,
   deriveStatusBarIds,
   fallbackItemName,
@@ -57,21 +58,46 @@ describe("splitStatusBarId", () => {
 
 describe("computeStatusBarOrder", () => {
   it("orders stored ids first, then appends unknown live ids in live order", () => {
-    const orders = computeStatusBarOrder(["b#0", "a#0"], ["a#0", "b#0", "c#0", "d#0"]);
+    const orders = computeStatusBarOrder(["b#0", "a#0"], ["a#0", "b#0", "c#0", "d#0"], new Set<string>());
     const sorted = [...orders.entries()].sort((x, y) => x[1] - y[1]).map(([id]) => id);
     expect(sorted).toEqual(["b#0", "a#0", "c#0", "d#0"]);
   });
 
   it("skips stored ids absent from live but emits an entry for every live id", () => {
-    const orders = computeStatusBarOrder(["gone#0", "a#0"], ["a#0", "new#0"]);
+    const orders = computeStatusBarOrder(["gone#0", "a#0"], ["a#0", "new#0"], new Set<string>());
     expect(orders.has("gone#0")).toBe(false);
     expect(orders.size).toBe(2);
   });
 
   it("assigns strictly increasing values starting at 1", () => {
-    const orders = computeStatusBarOrder(["a#0"], ["a#0", "b#0"]);
+    const orders = computeStatusBarOrder(["a#0"], ["a#0", "b#0"], new Set<string>());
     expect(orders.get("a#0")).toBe(1);
     expect(orders.get("b#0")).toBe(2);
+  });
+});
+
+describe("computeStatusBarOrder with pinned", () => {
+  it("emits no entry for pinned ids and keeps numbering contiguous for the rest", () => {
+    const orders = computeStatusBarOrder(["a#0", "pin#0", "b#0"], ["pin#0", "a#0", "b#0"], new Set(["pin#0"]));
+    expect(orders.has("pin#0")).toBe(false);
+    expect(orders.get("a#0")).toBe(1);
+    expect(orders.get("b#0")).toBe(2);
+  });
+
+  it("never assigns an order to a pinned id even when it is absent from stored", () => {
+    const orders = computeStatusBarOrder(["a#0"], ["a#0", "pin#0"], new Set(["pin#0"]));
+    expect(orders.size).toBe(1);
+    expect(orders.get("a#0")).toBe(1);
+  });
+});
+
+describe("cmdrHiddenSiblings", () => {
+  it("returns the other live items sharing the plugin key", () => {
+    expect(cmdrHiddenSiblings("obsidian-git", ["a#0", "obsidian-git#0", "obsidian-git#1"], "obsidian-git#0")).toEqual(["obsidian-git#1"]);
+  });
+
+  it("returns [] when the shown item is the plugin's only live one", () => {
+    expect(cmdrHiddenSiblings("word-count", ["word-count#0", "a#0"], "word-count#0")).toEqual([]);
   });
 });
 

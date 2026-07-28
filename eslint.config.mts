@@ -36,9 +36,10 @@ export default defineConfig(
 		// replaces rather than merges the rule's own default list, "Obsidian" is repeated
 		// here too so it keeps its default exemption. enforceCamelCaseLower mirrors the
 		// recommended preset's default so no other sentence-case behavior changes.
-		// 'Ungrouped' is the sentinel group's displayed name.
+		// 'Ungrouped' is the sentinel group's displayed name. 'Commander' is the cmdr
+		// plugin's proper-noun name, quoted in Notices about its hide lists.
 		rules: {
-			'obsidianmd/ui/sentence-case': ['warn', { brands: ['Ribbon Organizer', 'Obsidian', 'Ungrouped'], enforceCamelCaseLower: true }],
+			'obsidianmd/ui/sentence-case': ['warn', { brands: ['Ribbon Organizer', 'Obsidian', 'Ungrouped', 'Commander'], enforceCamelCaseLower: true }],
 		},
 	},
 	{

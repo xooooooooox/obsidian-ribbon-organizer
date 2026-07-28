@@ -4,7 +4,7 @@ import { BRAND_ICON_ID, BRAND_ICON_SVG } from "./core/icons";
 import { quickMenuEntries } from "./core/quickCommands";
 import { defaultMenus, normalizeMenus } from "./core/quickMenus";
 import { RibbonGroup, computeMenuRows, computeRibbonLayout, defaultGroups, normalizeGroups } from "./core/ribbonGroups";
-import { computeStatusBarOrder, deriveStatusBarIds, normalizeStatusBarOrder } from "./core/statusBarItems";
+import { cmdrHiddenSiblings, computeStatusBarOrder, deriveStatusBarIds, normalizeStatusBarOrder, splitStatusBarId } from "./core/statusBarItems";
 import { QuickMenu } from "./core/types";
 import { renderIcon } from "./ui/iconRender";
 import { RibbonOrganizerSettingTab } from "./ui/SettingTab";
@@ -13,6 +13,7 @@ interface RibbonOrganizerSettings {
   menus: QuickMenu[];             // user-defined ribbon menus: one composite ribbon icon each
   groups: RibbonGroup[];          // top-to-bottom ribbon group order (includes the ungrouped sentinel)
   statusBarOrder: string[];       // status bar item ids, left-to-right; [] = never reordered, bar stays native
+  statusBarHidden: string[];      // item ids hidden by this plugin's own layer (Commander's plugin-level hides merge in at read time)
   statusBarShowOnMobile: boolean; // floating pill on phones/tablets (styles.css, body-class gated)
 }
 
@@ -24,10 +25,12 @@ export interface RibbonSnapshotItem {
   hidden: boolean;
 }
 
-// A live status bar item as exposed to the settings UI: derived id + current text preview.
+// A live status bar item as exposed to the settings UI.
 export interface StatusBarSnapshotItem {
   id: string;
-  text: string;
+  text: string;    // collapsed textContent preview
+  pinned: boolean; // positions itself via its own CSS order; ordering leaves it alone
+  hidden: boolean; // effective: own hidden list OR Commander's plugin-level hide
 }
 
 interface RibbonInternalItem {
@@ -108,7 +111,7 @@ function rebuildCmdrStyle(hide: CmdrHideLists): void {
 }
 
 export default class RibbonOrganizerPlugin extends Plugin {
-  settings: RibbonOrganizerSettings = { menus: defaultMenus(), groups: defaultGroups(), statusBarOrder: [], statusBarShowOnMobile: false };
+  settings: RibbonOrganizerSettings = { menus: defaultMenus(), groups: defaultGroups(), statusBarOrder: [], statusBarHidden: [], statusBarShowOnMobile: false };
   private menuIcons: { name: string; el: HTMLElement }[] = [];
   private ribbonObserver: MutationObserver | null = null;
   private groupingDisabled = false;
@@ -116,6 +119,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
   private lastMenuOutcome = "not-run"; // surfaced by the diagnostics command
   private statusBarObserver: MutationObserver | null = null;
   private statusBarDisabled = false;
+  private statusBarStylesApplied = false; // a write pass ran this session; an emptied config needs one clearing pass
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -146,7 +150,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
     const sbContainer = statusBarContainer(this.app);
     if (sbContainer !== null) {
       for (const el of Array.from(sbContainer.children)) {
-        if (el.instanceOf(HTMLElement) && el.classList.contains("status-bar-item")) el.setCssStyles({ order: "" });
+        if (el.instanceOf(HTMLElement) && el.classList.contains("status-bar-item")) el.setCssStyles({ order: "", display: "" });
       }
     }
     const internals = ribbonInternals(this.app);
@@ -161,12 +165,14 @@ export default class RibbonOrganizerPlugin extends Plugin {
       quickCommands?: unknown;
       groups?: unknown;
       statusBarOrder?: unknown;
+      statusBarHidden?: unknown;
       statusBarShowOnMobile?: unknown;
     };
     this.settings = {
       menus: normalizeMenus(raw.menus, raw.quickCommands), // pre-0.4.0 quickCommands migrates to one menu
       groups: normalizeGroups(raw.groups ?? defaultGroups()),
       statusBarOrder: normalizeStatusBarOrder(raw.statusBarOrder),
+      statusBarHidden: normalizeStatusBarOrder(raw.statusBarHidden),
       statusBarShowOnMobile: raw.statusBarShowOnMobile === true,
     };
   }
@@ -182,6 +188,13 @@ export default class RibbonOrganizerPlugin extends Plugin {
     return new Set(access.plugin.settings.hide.leftRibbon.filter((t): t is string => typeof t === "string"));
   }
 
+  // Plugin ids Commander hides on the status bar; empty when Commander is absent or unreadable.
+  private cmdrHiddenStatusBarKeys(): Set<string> {
+    const access = cmdrAccess(this.app);
+    if (access.state !== "ok") return new Set();
+    return new Set(access.plugin.settings.hide.statusbar.filter((t): t is string => typeof t === "string"));
+  }
+
   // The settings UI's view of the live ribbon; null when the private internals changed shape.
   ribbonSnapshot(): RibbonSnapshotItem[] | null {
     const internals = ribbonInternals(this.app);
@@ -194,9 +207,9 @@ export default class RibbonOrganizerPlugin extends Plugin {
       .map(({ id, title, icon, hidden }) => ({ id, title, icon, hidden: hidden || cmdrHidden.has(title) }));
   }
 
-  // Live .status-bar-item elements in DOM order with their derived ids; null (once per
-  // session, with a Notice) when app.statusBar no longer matches the expected shape.
-  private liveStatusBarItems(): { id: string; el: HTMLElement }[] | null {
+  // Live .status-bar-item elements in DOM order with their derived ids and pinned probe;
+  // null (once per session, with a Notice) when app.statusBar no longer matches the shape.
+  private liveStatusBarItems(): { id: string; el: HTMLElement; pinned: boolean }[] | null {
     if (this.statusBarDisabled) return null;
     const container = statusBarContainer(this.app);
     if (container === null) {
@@ -209,36 +222,74 @@ export default class RibbonOrganizerPlugin extends Plugin {
       (el): el is HTMLElement => el.instanceOf(HTMLElement) && el.classList.contains("status-bar-item")
     );
     const ids = deriveStatusBarIds(els.map((el) => Array.from(el.classList)));
-    const out: { id: string; el: HTMLElement }[] = [];
+    const out: { id: string; el: HTMLElement; pinned: boolean }[] = [];
     els.forEach((el, i) => {
       const id = ids[i];
-      if (id !== undefined) out.push({ id, el });
+      if (id === undefined) return;
+      // Pinned probe: with the inline value cleared, a non-zero computed `order` means the
+      // item's own CSS positions it (quick-explorer's order:-9999 spacer, order:9999 right-
+      // pins). Clear + read + restore happen in one JS task — the browser never paints in
+      // between, so callers that don't rewrite orders (snapshot) leave the bar untouched.
+      const prev = el.style.order;
+      el.setCssStyles({ order: "" });
+      const pinned = getComputedStyle(el).order !== "0";
+      if (prev !== "") el.setCssStyles({ order: prev });
+      out.push({ id, el, pinned });
     });
     return out;
   }
 
-  // The settings UI's view of the live status bar (text = collapsed textContent preview).
+  // The settings UI's view of the live status bar. hidden is the EFFECTIVE state:
+  // this plugin's own per-item list OR Commander's plugin-level status bar hide.
   statusBarSnapshot(): StatusBarSnapshotItem[] | null {
     const live = this.liveStatusBarItems();
     if (live === null) return null;
-    return live.map(({ id, el }) => ({ id, text: (el.textContent ?? "").replace(/\s+/g, " ").trim() }));
+    const ownHidden = new Set(this.settings.statusBarHidden);
+    const cmdrKeys = this.cmdrHiddenStatusBarKeys();
+    return live.map(({ id, el, pinned }) => ({
+      id,
+      text: (el.textContent ?? "").replace(/\s+/g, " ").trim(),
+      pinned,
+      hidden: ownHidden.has(id) || cmdrKeys.has(splitStatusBarId(id).key),
+    }));
   }
 
-  // Applies the stored order as inline flex order values. Strict no-op while statusBarOrder
-  // is [] (fresh installs keep a byte-for-byte native bar; a drag always persists the full
-  // row sequence, so the array never returns to [] afterwards). Idempotent.
+  // Live elements by id — spotlight targets and strip-clone sources for the settings UI
+  // (one DOM scan per settings render, not one per row).
+  statusBarLiveElements(): Map<string, HTMLElement> {
+    const live = this.liveStatusBarItems();
+    return new Map((live ?? []).map((i) => [i.id, i.el]));
+  }
+
+  // Applies the stored order and this plugin's own hide layer as inline styles. Strict no-op
+  // while statusBarOrder AND statusBarHidden are both empty (fresh installs keep a
+  // byte-for-byte native bar). Pinned items never receive an order — overriding their own
+  // CSS position was the 0.9.x left-region bug; a stale 0.9.x inline order on a pinned item
+  // is cleared here, so the bar heals on the first apply after upgrade. Idempotent.
   applyStatusBarOrder(): void {
-    if (this.settings.statusBarOrder.length === 0) return;
+    const active = this.settings.statusBarOrder.length > 0 || this.settings.statusBarHidden.length > 0;
+    // Fresh installs (nothing configured, nothing applied this session) stay byte-for-byte
+    // native with no observer. Once a write pass has run, an emptied config (last item
+    // unhidden with no custom order) still gets ONE clearing pass to remove the residual
+    // inline styles — returning early there would strand a display:none forever.
+    if (!active && !this.statusBarStylesApplied) return;
     const live = this.liveStatusBarItems();
     if (live === null) return;
     this.statusBarObserver?.disconnect();
-    const orders = computeStatusBarOrder(this.settings.statusBarOrder, live.map((i) => i.id));
+    const pinned = new Set(live.filter((i) => i.pinned).map((i) => i.id));
+    const writeOrders = this.settings.statusBarOrder.length > 0;
+    const orders = computeStatusBarOrder(this.settings.statusBarOrder, live.map((i) => i.id), pinned);
+    const hidden = new Set(this.settings.statusBarHidden);
     for (const { id, el } of live) {
-      const order = orders.get(id);
-      el.setCssStyles({ order: order === undefined ? "" : String(order) });
+      const order = writeOrders ? orders.get(id) : undefined;
+      el.setCssStyles({
+        order: order === undefined ? "" : String(order),
+        display: hidden.has(id) ? "none" : "",
+      });
     }
+    this.statusBarStylesApplied = active;
     const container = statusBarContainer(this.app);
-    if (container !== null) this.observeStatusBar(container);
+    if (active && container !== null) this.observeStatusBar(container);
   }
 
   // Re-applies when items are added/removed (late-loading plugins, plugins rebuilding their
@@ -255,6 +306,35 @@ export default class RibbonOrganizerPlugin extends Plugin {
   // it even when the synced setting is on.
   applyMobileStatusBarClass(): void {
     document.body.toggleClass("ribbon-organizer-mobile-sb", Platform.isMobile && this.settings.statusBarShowOnMobile);
+  }
+
+  // The eye's target: asymmetric two-layer hide. Hiding writes ONLY this plugin's own
+  // per-item list (Commander's status bar hides are plugin-level and cannot express a single
+  // item). Showing clears both layers; because clearing Commander's plugin-level rule would
+  // reveal every item of that plugin, the plugin's other live items move to the own list
+  // first so their state survives.
+  async setStatusBarItemHidden(id: string, hidden: boolean): Promise<void> {
+    const withoutId = this.settings.statusBarHidden.filter((h) => h !== id);
+    if (hidden) {
+      this.settings.statusBarHidden = [...withoutId, id];
+    } else {
+      this.settings.statusBarHidden = withoutId;
+      const key = splitStatusBarId(id).key;
+      const access = cmdrAccess(this.app);
+      if (access.state === "ok" && access.plugin.settings.hide.statusbar.includes(key)) {
+        const live = this.liveStatusBarItems() ?? [];
+        const siblings = cmdrHiddenSiblings(key, live.map((i) => i.id), id).filter((s) => !this.settings.statusBarHidden.includes(s));
+        this.settings.statusBarHidden = [...this.settings.statusBarHidden, ...siblings];
+        access.plugin.settings.hide.statusbar = withTitle(access.plugin.settings.hide.statusbar, key, false);
+        await access.plugin.saveSettings();
+        rebuildCmdrStyle(access.plugin.settings.hide);
+      } else if (access.state === "broken") {
+        console.error("Ribbon Organizer: Commander settings do not match the expected shape; changed this plugin's own hide layer only");
+        new Notice("Ribbon Organizer: Commander settings look unexpected — the item may stay hidden by Commander.");
+      }
+    }
+    await this.saveSettings();
+    this.applyStatusBarOrder();
   }
 
   // Applies the configured grouping to the desktop left ribbon: flex order per icon plus one
