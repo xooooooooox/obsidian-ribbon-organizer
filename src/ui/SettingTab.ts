@@ -36,7 +36,7 @@ export class RibbonOrganizerSettingTab extends PluginSettingTab {
       {
         name: "Ribbon Organizer",
         desc: "Group and hide ribbon icons; launch commands from ribbon menus.",
-        aliases: ["ribbon groups", "quick menus", "quick commands", "divider", "separator", "reorder", "menu", "hide", "status bar", "statusbar", "mobile status bar"],
+        aliases: ["ribbon groups", "quick menus", "quick commands", "divider", "separator", "reorder", "menu", "hide", "status bar", "statusbar", "mobile status bar", "rewrite", "compact", "icon only", "not shown"],
         render: (setting) => {
           setting.settingEl.empty();
           setting.settingEl.addClass("ribbon-organizer-section");

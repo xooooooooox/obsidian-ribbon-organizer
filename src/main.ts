@@ -5,6 +5,7 @@ import { quickMenuEntries } from "./core/quickCommands";
 import { defaultMenus, normalizeMenus } from "./core/quickMenus";
 import { RibbonGroup, computeMenuRows, computeRibbonLayout, defaultGroups, normalizeGroups } from "./core/ribbonGroups";
 import { cmdrHiddenSiblings, computeStatusBarOrder, deriveStatusBarIds, normalizeStatusBarOrder, splitStatusBarId } from "./core/statusBarItems";
+import { SEEN_CAP, StatusBarRule, applyStatusBarRules, normalizeStatusBarModes, normalizeStatusBarRules, normalizeStatusBarSeen, pushSeen } from "./core/statusBarRules";
 import { QuickMenu } from "./core/types";
 import { renderIcon } from "./ui/iconRender";
 import { RibbonOrganizerSettingTab } from "./ui/SettingTab";
@@ -15,6 +16,9 @@ interface RibbonOrganizerSettings {
   statusBarOrder: string[];       // status bar item ids, left-to-right; [] = never reordered, bar stays native
   statusBarHidden: string[];      // item ids hidden by this plugin's own layer (Commander's plugin-level hides merge in at read time)
   statusBarShowOnMobile: boolean; // floating pill on phones/tablets (styles.css, body-class gated)
+  statusBarModes: Record<string, "compact" | "icon">; // absent id = Full (not stored)
+  statusBarRules: Record<string, StatusBarRule[]>;    // per-item text rewrite templates
+  statusBarSeen: Record<string, string[]>;            // learned raw status texts (cap 8, LRU newest-last)
 }
 
 // A live left-ribbon icon as exposed to the settings UI.
@@ -28,9 +32,14 @@ export interface RibbonSnapshotItem {
 // A live status bar item as exposed to the settings UI.
 export interface StatusBarSnapshotItem {
   id: string;
-  text: string;    // collapsed textContent preview
-  pinned: boolean; // positions itself via its own CSS order; ordering leaves it alone
-  hidden: boolean; // effective: own hidden list OR Commander's plugin-level hide
+  text: string;                      // RAW plugin text (pre-rewrite, collapsed) — seen learning and rule authoring use this
+  textDisplayed: string;             // what the bar currently shows (post-rewrite); === text when no rule matched
+  pinned: boolean;                   // positions itself via its own CSS order; ordering leaves it alone
+  hidden: boolean;                   // effective: own hidden list OR Commander's plugin-level hide
+  shown: boolean;                    // actually painted: offsetWidth > 0, display ≠ none, opacity ≠ 0
+  mode: "full" | "compact" | "icon"; // resolved display mode
+  ruleCount: number;                 // rewrite rules configured for this id
+  hasText: boolean;                  // text now, or rules/seen entries exist (wand eligibility)
 }
 
 interface RibbonInternalItem {
@@ -111,7 +120,16 @@ function rebuildCmdrStyle(hide: CmdrHideLists): void {
 }
 
 export default class RibbonOrganizerPlugin extends Plugin {
-  settings: RibbonOrganizerSettings = { menus: defaultMenus(), groups: defaultGroups(), statusBarOrder: [], statusBarHidden: [], statusBarShowOnMobile: false };
+  settings: RibbonOrganizerSettings = {
+    menus: defaultMenus(),
+    groups: defaultGroups(),
+    statusBarOrder: [],
+    statusBarHidden: [],
+    statusBarShowOnMobile: false,
+    statusBarModes: {},
+    statusBarRules: {},
+    statusBarSeen: {},
+  };
   private menuIcons: { name: string; el: HTMLElement }[] = [];
   private ribbonObserver: MutationObserver | null = null;
   private groupingDisabled = false;
@@ -120,6 +138,13 @@ export default class RibbonOrganizerPlugin extends Plugin {
   private statusBarObserver: MutationObserver | null = null;
   private statusBarDisabled = false;
   private statusBarStylesApplied = false; // a write pass ran this session; an emptied config needs one clearing pass
+  // One observer per rule-bearing or Compact live item, keyed by id; recreated when the element changes.
+  private statusBarRuleObservers = new Map<string, { obs: MutationObserver; el: HTMLElement }>();
+  // Per Text node: the raw value we transformed and the value we wrote. A node whose data
+  // equals `written` is our own write (skip — kills observer loops and oscillating rules);
+  // restore paths put `original` back while `written` still stands.
+  private statusBarNodeMemo = new WeakMap<Text, { original: string; written: string }>();
+  private statusBarSeenTimer: number | null = null;
 
   async onload(): Promise<void> {
     await this.loadSettings();
@@ -147,10 +172,23 @@ export default class RibbonOrganizerPlugin extends Plugin {
     this.statusBarObserver?.disconnect();
     this.statusBarObserver = null;
     document.body.removeClass("ribbon-organizer-mobile-sb");
+    if (this.statusBarSeenTimer !== null) {
+      window.clearTimeout(this.statusBarSeenTimer);
+      this.statusBarSeenTimer = null;
+    }
+    for (const { obs, el } of this.statusBarRuleObservers.values()) {
+      obs.disconnect();
+      this.restoreStatusBarText(el);
+    }
+    this.statusBarRuleObservers.clear();
     const sbContainer = statusBarContainer(this.app);
     if (sbContainer !== null) {
       for (const el of Array.from(sbContainer.children)) {
-        if (el.instanceOf(HTMLElement) && el.classList.contains("status-bar-item")) el.setCssStyles({ order: "", display: "" });
+        if (el.instanceOf(HTMLElement) && el.classList.contains("status-bar-item")) {
+          el.setCssStyles({ order: "", display: "", maxWidth: "", overflow: "", textOverflow: "", whiteSpace: "" });
+          el.removeClass("ribbon-organizer-sb-icononly");
+          el.removeAttribute("title");
+        }
       }
     }
     const internals = ribbonInternals(this.app);
@@ -167,6 +205,9 @@ export default class RibbonOrganizerPlugin extends Plugin {
       statusBarOrder?: unknown;
       statusBarHidden?: unknown;
       statusBarShowOnMobile?: unknown;
+      statusBarModes?: unknown;
+      statusBarRules?: unknown;
+      statusBarSeen?: unknown;
     };
     this.settings = {
       menus: normalizeMenus(raw.menus, raw.quickCommands), // pre-0.4.0 quickCommands migrates to one menu
@@ -174,6 +215,9 @@ export default class RibbonOrganizerPlugin extends Plugin {
       statusBarOrder: normalizeStatusBarOrder(raw.statusBarOrder),
       statusBarHidden: normalizeStatusBarOrder(raw.statusBarHidden),
       statusBarShowOnMobile: raw.statusBarShowOnMobile === true,
+      statusBarModes: normalizeStatusBarModes(raw.statusBarModes),
+      statusBarRules: normalizeStatusBarRules(raw.statusBarRules),
+      statusBarSeen: normalizeStatusBarSeen(raw.statusBarSeen),
     };
   }
 
@@ -239,19 +283,36 @@ export default class RibbonOrganizerPlugin extends Plugin {
     return out;
   }
 
-  // The settings UI's view of the live status bar. hidden is the EFFECTIVE state:
-  // this plugin's own per-item list OR Commander's plugin-level status bar hide.
+  // The settings UI's view of the live status bar. hidden merges this plugin's own list
+  // with Commander's plugin-level hide; text is RAW (pre-rewrite), textDisplayed is what
+  // the bar shows. Rendering a snapshot also samples seen-learning (spec sample point).
   statusBarSnapshot(): StatusBarSnapshotItem[] | null {
     const live = this.liveStatusBarItems();
     if (live === null) return null;
     const ownHidden = new Set(this.settings.statusBarHidden);
     const cmdrKeys = this.cmdrHiddenStatusBarKeys();
-    return live.map(({ id, el, pinned }) => ({
-      id,
-      text: (el.textContent ?? "").replace(/\s+/g, " ").trim(),
-      pinned,
-      hidden: ownHidden.has(id) || cmdrKeys.has(splitStatusBarId(id).key),
-    }));
+    return live.map(({ id, el, pinned }) => {
+      const raw = this.rawStatusBarText(el);
+      // Learn per Text node (not the concatenated item text): rules match one node at a
+      // time, so only per-node samples are guaranteed to be authorable as find templates.
+      for (const node of this.textNodesOf(el)) {
+        const memo = this.statusBarNodeMemo.get(node);
+        this.learnStatusBarText(id, memo !== undefined && node.data === memo.written ? memo.original : node.data);
+      }
+      const rules = this.settings.statusBarRules[id] ?? [];
+      const style = getComputedStyle(el);
+      return {
+        id,
+        text: raw,
+        textDisplayed: (el.textContent ?? "").replace(/\s+/g, " ").trim(),
+        pinned,
+        hidden: ownHidden.has(id) || cmdrKeys.has(splitStatusBarId(id).key),
+        shown: el.offsetWidth > 0 && style.display !== "none" && style.opacity !== "0",
+        mode: this.settings.statusBarModes[id] ?? "full",
+        ruleCount: rules.length,
+        hasText: raw !== "" || rules.length > 0 || (this.settings.statusBarSeen[id] ?? []).length > 0,
+      };
+    });
   }
 
   // Live elements by id — spotlight targets and strip-clone sources for the settings UI
@@ -261,17 +322,17 @@ export default class RibbonOrganizerPlugin extends Plugin {
     return new Map((live ?? []).map((i) => [i.id, i.el]));
   }
 
-  // Applies the stored order and this plugin's own hide layer as inline styles. Strict no-op
-  // while statusBarOrder AND statusBarHidden are both empty (fresh installs keep a
-  // byte-for-byte native bar). Pinned items never receive an order — overriding their own
-  // CSS position was the 0.9.x left-region bug; a stale 0.9.x inline order on a pinned item
-  // is cleared here, so the bar heals on the first apply after upgrade. Idempotent.
+  // Applies the stored order, this plugin's own hide layer, and display modes as inline
+  // styles/classes, then syncs the rewrite observers. Strict no-op while every config source
+  // is empty and nothing was applied this session; an emptied config gets ONE clearing pass.
+  // statusBarSeen never activates the pass — learning must not change rendering. Pinned
+  // items never receive an order (the 0.9.x left-region bug). Idempotent.
   applyStatusBarOrder(): void {
-    const active = this.settings.statusBarOrder.length > 0 || this.settings.statusBarHidden.length > 0;
-    // Fresh installs (nothing configured, nothing applied this session) stay byte-for-byte
-    // native with no observer. Once a write pass has run, an emptied config (last item
-    // unhidden with no custom order) still gets ONE clearing pass to remove the residual
-    // inline styles — returning early there would strand a display:none forever.
+    const active =
+      this.settings.statusBarOrder.length > 0 ||
+      this.settings.statusBarHidden.length > 0 ||
+      Object.keys(this.settings.statusBarModes).length > 0 ||
+      Object.keys(this.settings.statusBarRules).length > 0;
     if (!active && !this.statusBarStylesApplied) return;
     const live = this.liveStatusBarItems();
     if (live === null) return;
@@ -282,11 +343,20 @@ export default class RibbonOrganizerPlugin extends Plugin {
     const hidden = new Set(this.settings.statusBarHidden);
     for (const { id, el } of live) {
       const order = writeOrders ? orders.get(id) : undefined;
+      const mode = this.settings.statusBarModes[id];
       el.setCssStyles({
         order: order === undefined ? "" : String(order),
         display: hidden.has(id) ? "none" : "",
+        maxWidth: mode === "compact" ? "12em" : "",
+        overflow: mode === "compact" ? "hidden" : "",
+        textOverflow: mode === "compact" ? "ellipsis" : "",
+        whiteSpace: mode === "compact" ? "nowrap" : "",
       });
+      el.toggleClass("ribbon-organizer-sb-icononly", mode === "icon");
+      if (mode !== "compact") el.removeAttribute("title");
+      this.rewriteStatusBarItem(id, el); // rules + seen sampling + compact title, every apply
     }
+    this.syncStatusBarRuleObservers(live);
     this.statusBarStylesApplied = active;
     const container = statusBarContainer(this.app);
     if (active && container !== null) this.observeStatusBar(container);
@@ -306,6 +376,103 @@ export default class RibbonOrganizerPlugin extends Plugin {
   // it even when the synced setting is on.
   applyMobileStatusBarClass(): void {
     document.body.toggleClass("ribbon-organizer-mobile-sb", Platform.isMobile && this.settings.statusBarShowOnMobile);
+  }
+
+  // All Text nodes under a status bar item — rules touch these, never element structure.
+  private textNodesOf(el: HTMLElement): Text[] {
+    const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const out: Text[] = [];
+    let node = walker.nextNode();
+    while (node !== null) {
+      out.push(node as Text);
+      node = walker.nextNode();
+    }
+    return out;
+  }
+
+  // The item's text as its plugin wrote it (memoized originals substituted for our rewrites).
+  private rawStatusBarText(el: HTMLElement): string {
+    let raw = "";
+    for (const node of this.textNodesOf(el)) {
+      const memo = this.statusBarNodeMemo.get(node);
+      raw += memo !== undefined && node.data === memo.written ? memo.original : node.data;
+    }
+    return raw.replace(/\s+/g, " ").trim();
+  }
+
+  // Rewrites one item's Text nodes per its rules, feeds seen-learning with raw values, and
+  // (Compact mode) keeps the hover title = raw text. Fail-open: unmatched nodes untouched.
+  private rewriteStatusBarItem(id: string, el: HTMLElement): void {
+    const rules = this.settings.statusBarRules[id] ?? [];
+    let rawFull = "";
+    for (const node of this.textNodesOf(el)) {
+      const memo = this.statusBarNodeMemo.get(node);
+      if (memo !== undefined && node.data === memo.written) {
+        rawFull += memo.original; // our own write — skip, but keep the raw text intact
+        continue;
+      }
+      const raw = node.data;
+      rawFull += raw;
+      this.learnStatusBarText(id, raw);
+      if (rules.length === 0) continue;
+      const out = applyStatusBarRules(raw, rules);
+      if (out !== raw) {
+        this.statusBarNodeMemo.set(node, { original: raw, written: out });
+        node.data = out;
+      }
+    }
+    if (this.settings.statusBarModes[id] === "compact") el.title = rawFull.replace(/\s+/g, " ").trim();
+  }
+
+  // Seen-state learning. Only a genuinely new value schedules a (debounced) save, so
+  // high-frequency status churn never write-storms data.json.
+  private learnStatusBarText(id: string, raw: string): void {
+    const collapsed = raw.replace(/\s+/g, " ").trim();
+    if (collapsed === "") return;
+    const current = this.settings.statusBarSeen[id] ?? [];
+    const isNew = !current.includes(collapsed);
+    this.settings.statusBarSeen[id] = pushSeen(current, collapsed, SEEN_CAP);
+    if (isNew && this.statusBarSeenTimer === null) {
+      this.statusBarSeenTimer = window.setTimeout(() => {
+        this.statusBarSeenTimer = null;
+        void this.saveSettings();
+      }, 2000);
+    }
+  }
+
+  // Best-effort undo of our rewrites on one element: nodes the plugin has since overwritten
+  // keep the plugin's newer text (its next update wins anyway).
+  private restoreStatusBarText(el: HTMLElement): void {
+    for (const node of this.textNodesOf(el)) {
+      const memo = this.statusBarNodeMemo.get(node);
+      if (memo !== undefined && node.data === memo.written) node.data = memo.original;
+    }
+  }
+
+  // One observer per live item that needs text-churn tracking: rule-bearing items (rewrite
+  // on every plugin update) and Compact items (hover title must stay = the raw text).
+  // Recreated when the plugin rebuilt its element, disconnected (with text restored) when
+  // neither reason remains or the item disappeared.
+  private syncStatusBarRuleObservers(live: { id: string; el: HTMLElement }[]): void {
+    const wanted = new Map(
+      live
+        .filter((i) => (this.settings.statusBarRules[i.id] ?? []).length > 0 || this.settings.statusBarModes[i.id] === "compact")
+        .map((i) => [i.id, i.el])
+    );
+    for (const [id, entry] of Array.from(this.statusBarRuleObservers)) {
+      if (wanted.get(id) !== entry.el) {
+        entry.obs.disconnect();
+        this.restoreStatusBarText(entry.el);
+        this.statusBarRuleObservers.delete(id);
+      }
+    }
+    for (const [id, el] of wanted) {
+      if (this.statusBarRuleObservers.has(id)) continue;
+      const obs = new MutationObserver(() => this.rewriteStatusBarItem(id, el));
+      obs.observe(el, { characterData: true, childList: true, subtree: true });
+      this.statusBarRuleObservers.set(id, { obs, el });
+      this.rewriteStatusBarItem(id, el);
+    }
   }
 
   // The eye's target: asymmetric two-layer hide. Hiding writes ONLY this plugin's own
@@ -333,6 +500,24 @@ export default class RibbonOrganizerPlugin extends Plugin {
         new Notice("Ribbon Organizer: Commander settings look unexpected — the item may stay hidden by Commander.");
       }
     }
+    await this.saveSettings();
+    this.applyStatusBarOrder();
+  }
+
+  // Display mode per item: Full is the absence of an entry, so untouched items keep a
+  // byte-for-byte native element.
+  async setStatusBarItemMode(id: string, mode: "full" | "compact" | "icon"): Promise<void> {
+    if (mode === "full") delete this.settings.statusBarModes[id];
+    else this.settings.statusBarModes[id] = mode;
+    await this.saveSettings();
+    this.applyStatusBarOrder();
+  }
+
+  // Rewrite rules per item; an emptied list removes the entry, and the next apply pass
+  // disconnects the item's observer and restores its text.
+  async setStatusBarItemRules(id: string, rules: StatusBarRule[]): Promise<void> {
+    if (rules.length === 0) delete this.settings.statusBarRules[id];
+    else this.settings.statusBarRules[id] = rules;
     await this.saveSettings();
     this.applyStatusBarOrder();
   }

@@ -1,6 +1,7 @@
 import { App, ExtraButtonComponent, Setting, setIcon } from "obsidian";
 import { fallbackItemName, splitStatusBarId, statusBarRowIds } from "../core/statusBarItems";
 import { withScrollPreserved } from "./scrollKeep";
+import { StatusBarItemModal } from "./StatusBarItemModal";
 import type RibbonOrganizerPlugin from "../main";
 import type { StatusBarSnapshotItem } from "../main";
 
@@ -95,7 +96,7 @@ export class StatusBarSection {
     const strip = containerEl.createDiv({ cls: "status-bar ribbon-organizer-sb-strip", attr: { "aria-hidden": "true" } });
     const clones = new Map<string, HTMLElement>();
     for (const item of snapshot) {
-      if (item.hidden) continue;
+      if (item.hidden || !item.shown) continue;
       const el = liveEls.get(item.id);
       if (el === undefined) continue;
       const clone = el.cloneNode(true) as HTMLElement;
@@ -127,10 +128,34 @@ export class StatusBarSection {
     if ((keyCounts.get(key) ?? 0) > 1) title.createSpan({ cls: "ribbon-organizer-sb-ordinal", text: ` · ${String(index + 1)}` });
     if (live === undefined) row.createSpan({ cls: "ribbon-organizer-sb-missing", text: "Not on this device" });
     else if (pinned) row.createSpan({ cls: "ribbon-organizer-sb-pintag", text: "Keeps its own position" });
-    else if (live.text !== "") row.createSpan({ cls: "ribbon-organizer-sb-preview", text: live.text });
+    else if (!live.hidden && !live.shown) row.createSpan({ cls: "ribbon-organizer-sb-notshown", text: "Not shown right now" });
+    else if (live.textDisplayed !== "") row.createSpan({ cls: "ribbon-organizer-sb-preview", text: live.textDisplayed });
     row.createSpan({ cls: "ribbon-organizer-rg-plugin", text: key });
     if (live !== undefined) {
       const btns = row.createDiv({ cls: "ribbon-organizer-rg-btns" });
+      if (live.hasText) {
+        const wand = new ExtraButtonComponent(btns)
+          .setIcon("wand-2")
+          .setTooltip("Rewrite rules")
+          .onClick(() => {
+            new StatusBarItemModal(this.app, this.plugin, id, this.displayName(key), () => {
+              if (this.containerEl !== null) this.render(this.containerEl);
+            }).open();
+          });
+        wand.extraSettingsEl.toggleClass("is-rules-on", live.ruleCount > 0);
+      }
+      const MODE_NEXT = { full: "compact", compact: "icon", icon: "full" } as const;
+      const MODE_ICON = { full: "text", compact: "ellipsis", icon: "circle-dot" } as const;
+      const MODE_NAME = { full: "Full", compact: "Compact", icon: "Icon only" } as const;
+      const modeBtn = new ExtraButtonComponent(btns)
+        .setIcon(MODE_ICON[live.mode])
+        .setTooltip(MODE_NAME[live.mode])
+        .onClick(() => {
+          void this.plugin.setStatusBarItemMode(id, MODE_NEXT[live.mode]).then(() => {
+            if (this.containerEl !== null) this.render(this.containerEl);
+          });
+        });
+      modeBtn.extraSettingsEl.toggleClass("is-mode-on", live.mode !== "full");
       const eye = new ExtraButtonComponent(btns)
         .setIcon(live.hidden ? "eye-off" : "eye")
         .setTooltip(live.hidden ? "Show this item" : "Hide this item")
@@ -143,7 +168,7 @@ export class StatusBarSection {
     }
 
     // Spotlight: hidden items have no visible body, missing items no body at all.
-    if (live !== undefined && !live.hidden) this.wireSpot(row, clone, liveEl);
+    if (live !== undefined && !live.hidden && live.shown) this.wireSpot(row, clone, liveEl);
 
     if (pinned) return; // pinned rows neither drag nor accept drops
     row.addEventListener("dragstart", (e) => {
@@ -151,14 +176,7 @@ export class StatusBarSection {
       e.dataTransfer?.setData("text/plain", ""); // some platforms refuse to start a drag without data
       if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
     });
-    this.wireDrop(row, (draggedId) => {
-      if (draggedId === id) return;
-      const out = rowIds.filter((r) => r !== draggedId);
-      const to = out.indexOf(id); // insert before the hovered row (indexOf is post-removal)
-      if (to === -1) return;
-      out.splice(to, 0, draggedId);
-      this.persist(out);
-    });
+    this.wireRowDrop(row, id, rowIds);
   }
 
   // Three-way hover: entering the row, its strip clone, or the real bar item highlights the
@@ -211,6 +229,45 @@ export class StatusBarSection {
       const draggedId = this.drag;
       this.drag = null;
       if (draggedId !== null) onDrop(draggedId);
+    });
+  }
+
+  // Half-zone insertion: the pointer's vertical half decides before/after, so the last
+  // row's bottom half reaches the end of the list.
+  private wireRowDrop(row: HTMLElement, id: string, rowIds: string[]): void {
+    const zoneOf = (e: DragEvent): "before" | "after" => {
+      const rect = row.getBoundingClientRect();
+      return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+    };
+    const clear = (): void => {
+      row.removeClass("is-drop-before");
+      row.removeClass("is-drop-after");
+    };
+    row.addEventListener("dragover", (e) => {
+      if (this.drag === null) return;
+      e.preventDefault();
+      const zone = zoneOf(e);
+      row.toggleClass("is-drop-before", zone === "before");
+      row.toggleClass("is-drop-after", zone === "after");
+    });
+    row.addEventListener("dragleave", clear);
+    row.addEventListener("dragend", () => {
+      this.drag = null;
+      clear();
+    });
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const zone = zoneOf(e);
+      clear();
+      const draggedId = this.drag;
+      this.drag = null;
+      if (draggedId === null || draggedId === id) return;
+      const out = rowIds.filter((r) => r !== draggedId);
+      let to = out.indexOf(id);
+      if (to === -1) return;
+      if (zone === "after") to += 1;
+      out.splice(to, 0, draggedId);
+      this.persist(out);
     });
   }
 

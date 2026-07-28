@@ -148,6 +148,25 @@
   border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m);
   background: var(--background-secondary); padding: 4px 10px; margin-bottom: 8px; transform: none; }
 .ribbon-organizer-sb-spot { outline: 1.5px solid var(--interactive-accent); outline-offset: 1px; border-radius: 3px; }
+.ribbon-organizer-sb-notshown { margin-left: auto; color: var(--text-faint); font-size: var(--font-ui-smaller); font-style: italic; }
+.ribbon-organizer-sb-item.is-drop-before { box-shadow: inset 0 2px 0 var(--interactive-accent); }
+.ribbon-organizer-sb-item.is-drop-after { box-shadow: inset 0 -2px 0 var(--interactive-accent); }
+.ribbon-organizer-rg-btns .is-rules-on, .ribbon-organizer-rg-btns .is-mode-on { color: var(--text-accent); }
+/* Icon only: zero the text, keep icon children at their normal size */
+.status-bar-item.ribbon-organizer-sb-icononly { font-size: 0; letter-spacing: 0; }
+.status-bar-item.ribbon-organizer-sb-icononly svg,
+.status-bar-item.ribbon-organizer-sb-icononly .svg-icon { width: var(--icon-s, 16px); height: var(--icon-s, 16px); }
+/* Customize modal */
+.ribbon-organizer-sbm-sec { font-size: var(--font-ui-smaller); color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin: 14px 0 6px; }
+.ribbon-organizer-sbm-modes { display: flex; gap: 6px; }
+.ribbon-organizer-sbm-pill.is-selected { border-color: var(--interactive-accent); color: var(--text-normal); }
+.ribbon-organizer-sbm-seen { display: flex; flex-wrap: wrap; gap: 6px; }
+.ribbon-organizer-sbm-chip { font-size: var(--font-ui-smaller); border: 1px dashed var(--background-modifier-border); background: var(--background-primary); border-radius: 5px; padding: 2px 8px; box-shadow: none; height: auto; }
+.ribbon-organizer-sbm-rule { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+.ribbon-organizer-sbm-rule input { flex: 1; font-family: var(--font-monospace); font-size: var(--font-ui-smaller); }
+.ribbon-organizer-sbm-arrow { color: var(--text-faint); flex: none; }
+.ribbon-organizer-sbm-addbar { margin-top: 8px; }
+.ribbon-organizer-sbm-note { margin-top: 12px; color: var(--text-faint); font-size: var(--font-ui-smaller); }
 
 /* ============================================================
  * Mobile status bar pill — gated on body.ribbon-organizer-mobile-sb,
