@@ -3,7 +3,13 @@
 
 export interface StatusBarRule {
   find: string;    // template: literal text with {name} placeholders for the changing parts
-  replace: string; // output: placeholders carry the captured text over
+  replace: string; // output text: placeholders carry the captured text over; may be ""
+  icon?: string;   // optional icon id (Obsidian built-in or iconize pack), shown before the text
+}
+
+export interface RuleResult {
+  text: string;
+  icon: string | null;
 }
 
 const REGEX_SPECIALS = /[.*+?^${}()|[\]\\]/g;
@@ -33,11 +39,15 @@ function compileFind(find: string): { re: RegExp; names: string[] } | null {
   return { re: new RegExp(pattern + "$"), names };
 }
 
-// First matching rule wins; unmatched text returns unchanged — a rule set can shorten,
-// never blank. Empty finds (mid-edit draft rows) never match.
-export function applyStatusBarRules(text: string, rules: StatusBarRule[]): string {
+// First matching active rule wins; unmatched text returns unchanged. Active needs a find
+// plus at least one target part (text or icon) — a rule with both target parts empty is a
+// mid-edit draft and never matches, like empty finds. An icon-only rule (icon, empty
+// replace) legitimately blanks the text: the icon takes its place.
+export function applyStatusBarRules(text: string, rules: StatusBarRule[]): RuleResult {
   for (const rule of rules) {
     if (rule.find === "") continue;
+    const icon = rule.icon ?? "";
+    if (rule.replace === "" && icon === "") continue;
     const compiled = compileFind(rule.find);
     if (compiled === null) continue;
     const match = compiled.re.exec(text);
@@ -64,9 +74,33 @@ export function applyStatusBarRules(text: string, rules: StatusBarRule[]): strin
       out += nameIndex === -1 ? rest.slice(open, close + 1) : (match[nameIndex + 1] ?? "");
       rest = rest.slice(close + 1);
     }
-    return out;
+    return { text: out, icon: icon === "" ? null : icon };
   }
-  return text;
+  return { text, icon: null };
+}
+
+// Rule template from a clicked seen sample: the longest prefix (else suffix) shared with
+// another sample becomes the literal part, the changing remainder becomes {x}. ONE edge
+// only — templating both edges would narrow the match (a "{x} hours ago" tail excludes
+// "just now") and strip units ("5" instead of "5 hours ago"). replace is bare {x}: the
+// static edge is exactly the noise a rewrite exists to drop. No usable partner falls back
+// to a literal identity rule, the pre-template chip behavior.
+export function autoTemplateRule(sample: string, others: string[]): StatusBarRule {
+  let prefix = "";
+  let suffix = "";
+  for (const other of others) {
+    if (other === sample) continue;
+    const max = Math.min(sample.length, other.length);
+    let p = 0;
+    while (p < max && sample[p] === other[p]) p++;
+    if (p > prefix.length && p < sample.length && p < other.length) prefix = sample.slice(0, p);
+    let s = 0;
+    while (s < max && sample[sample.length - 1 - s] === other[other.length - 1 - s]) s++;
+    if (s > suffix.length && s < sample.length && s < other.length) suffix = sample.slice(sample.length - s);
+  }
+  if (prefix !== "") return { find: prefix + "{x}", replace: "{x}" };
+  if (suffix !== "") return { find: "{x}" + suffix, replace: "{x}" };
+  return { find: sample, replace: sample };
 }
 
 export const SEEN_CAP = 8;
@@ -102,7 +136,10 @@ export function normalizeStatusBarRules(raw: unknown): Record<string, StatusBarR
       const entryObj = entry as Record<string, unknown>;
       const find = entryObj.find;
       const replace = entryObj.replace;
-      if (typeof find === "string" && typeof replace === "string") rules.push({ find, replace });
+      if (typeof find === "string" && typeof replace === "string") {
+        const icon = entryObj.icon;
+        rules.push(typeof icon === "string" && icon !== "" ? { find, replace, icon } : { find, replace });
+      }
     }
     if (rules.length > 0) out[key] = rules;
   }

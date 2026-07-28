@@ -1,11 +1,17 @@
-import { App, ButtonComponent, ExtraButtonComponent, Modal } from "obsidian";
-import { StatusBarRule } from "../core/statusBarRules";
+import { App, ButtonComponent, ExtraButtonComponent, Modal, setIcon } from "obsidian";
+import { StatusBarRule, applyStatusBarRules, autoTemplateRule } from "../core/statusBarRules";
+import { renderIcon } from "./iconRender";
+import { IconSelectModal } from "./IconSelectModal";
 import type RibbonOrganizerPlugin from "../main";
 
-// Per-item customize modal: display-mode pills, learned "seen" chips (click to start a
-// rule), and the rewrite-rule editor. Every change saves and re-applies immediately; the
-// section behind refreshes via onDone when the modal closes.
+// Per-item customize modal: display-mode pills, the seen-state preview (each learned raw
+// value shown alongside what the current rules make of it; click one to start a rule via
+// auto-templating), and the rewrite-rule editor with an optional per-rule icon. Every
+// change saves and re-applies immediately; the section behind refreshes via onDone when
+// the modal closes.
 export class StatusBarItemModal extends Modal {
+  private seenEl: HTMLElement | null = null;
+
   constructor(
     app: App,
     private plugin: RibbonOrganizerPlugin,
@@ -48,15 +54,11 @@ export class StatusBarItemModal extends Modal {
     }
 
     const seen = this.plugin.settings.statusBarSeen[this.id] ?? [];
+    this.seenEl = null;
     if (seen.length > 0) {
       contentEl.createDiv({ cls: "ribbon-organizer-sbm-sec", text: "Seen on this device — click one to start a rule" });
-      const seenEl = contentEl.createDiv({ cls: "ribbon-organizer-sbm-seen" });
-      for (const sample of [...seen].reverse()) {
-        const chip = seenEl.createEl("button", { cls: "ribbon-organizer-sbm-chip", text: sample });
-        chip.addEventListener("click", () => {
-          void this.saveRules([...this.rules(), { find: sample, replace: sample }]).then(() => this.renderContent());
-        });
-      }
+      this.seenEl = contentEl.createDiv({ cls: "ribbon-organizer-sbm-seen" });
+      this.renderSeen(seen);
     }
 
     contentEl.createDiv({ cls: "ribbon-organizer-sbm-sec", text: "Rewrite rules" });
@@ -65,12 +67,39 @@ export class StatusBarItemModal extends Modal {
       const findEl = rowEl.createEl("input", { attr: { type: "text", placeholder: "Text to match" } });
       findEl.value = rule.find;
       rowEl.createSpan({ cls: "ribbon-organizer-sbm-arrow", text: "→" });
-      const replaceEl = rowEl.createEl("input", { attr: { type: "text", placeholder: "Show instead" } });
+
+      const iconBtn = rowEl.createEl("button", { cls: "ribbon-organizer-sbm-iconbtn", attr: { "aria-label": "Pick an icon" } });
+      if (rule.icon === undefined) {
+        iconBtn.addClass("is-unset");
+        setIcon(iconBtn, "plus");
+      } else {
+        renderIcon(iconBtn, rule.icon, undefined, this.app);
+        const clearEl = iconBtn.createSpan({ cls: "ribbon-organizer-sbm-iconclear", attr: { "aria-label": "Remove icon" } });
+        setIcon(clearEl, "x");
+        clearEl.addEventListener("click", (event) => {
+          event.stopPropagation();
+          const next = this.rules();
+          const prev = next[index];
+          if (prev !== undefined) next[index] = { find: prev.find, replace: prev.replace };
+          void this.saveRules(next).then(() => this.renderContent());
+        });
+      }
+      iconBtn.addEventListener("click", () => {
+        new IconSelectModal(this.app, (icon) => {
+          const next = this.rules();
+          const prev = next[index];
+          if (prev !== undefined) next[index] = { ...prev, icon };
+          void this.saveRules(next).then(() => this.renderContent());
+        }).open();
+      });
+
+      const replaceEl = rowEl.createEl("input", { attr: { type: "text", placeholder: "Text (optional)" } });
       replaceEl.value = rule.replace;
       const commit = (): void => {
         const next = this.rules();
-        next[index] = { find: findEl.value, replace: replaceEl.value };
-        void this.saveRules(next);
+        const icon = next[index]?.icon;
+        next[index] = icon === undefined ? { find: findEl.value, replace: replaceEl.value } : { find: findEl.value, replace: replaceEl.value, icon };
+        void this.saveRules(next).then(() => this.renderSeen(this.plugin.settings.statusBarSeen[this.id] ?? []));
       };
       findEl.addEventListener("change", commit);
       replaceEl.addEventListener("change", commit);
@@ -84,8 +113,33 @@ export class StatusBarItemModal extends Modal {
 
     contentEl.createDiv({
       cls: "ribbon-organizer-sbm-note",
-      text: "Use {name} for the part that changes; it carries over to the result. Anything that doesn't match a rule is shown as-is.",
+      text: "Use {x} for the part that changes; it carries over to the result. Give a rule an icon, some text, or both. Anything that doesn't match a rule is shown as-is.",
     });
+  }
+
+  // The preview half of the seen section, re-rendered alone on rule edits so a mid-tab
+  // focus never gets torn down with the whole modal body.
+  private renderSeen(seen: string[]): void {
+    if (this.seenEl === null) return;
+    this.seenEl.empty();
+    const rules = this.rules();
+    for (const sample of [...seen].reverse()) {
+      const rowEl = this.seenEl.createDiv({ cls: "ribbon-organizer-sbm-seenrow" });
+      const chip = rowEl.createEl("button", { cls: "ribbon-organizer-sbm-chip", text: sample });
+      chip.addEventListener("click", () => {
+        void this.saveRules([...this.rules(), autoTemplateRule(sample, seen.filter((s) => s !== sample))]).then(() => this.renderContent());
+      });
+      rowEl.createSpan({ cls: "ribbon-organizer-sbm-arrow", text: "→" });
+      const out = applyStatusBarRules(sample, rules);
+      const resultEl = rowEl.createSpan({ cls: "ribbon-organizer-sbm-result" });
+      if (out.text === sample && out.icon === null) {
+        resultEl.addClass("is-asis");
+        resultEl.setText(sample);
+        continue;
+      }
+      if (out.icon !== null) renderIcon(resultEl.createSpan({ cls: "ribbon-organizer-sbm-result-icon" }), out.icon, undefined, this.app);
+      if (out.text !== "") resultEl.createSpan({ text: out.text });
+    }
   }
 
   private rules(): StatusBarRule[] {

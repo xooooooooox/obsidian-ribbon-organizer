@@ -87,7 +87,7 @@
 .ribbon-organizer-rg-icon { display: inline-flex; --icon-size: 16px; }
 .ribbon-organizer-rg-icon .svg-icon { flex: none; }
 .ribbon-organizer-rg-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ribbon-organizer-rg-plugin { margin-left: auto; font-size: var(--font-ui-smaller); color: var(--text-faint); }
+.ribbon-organizer-rg-plugin { margin-left: auto; font-family: var(--font-monospace); font-size: var(--font-ui-smaller); color: var(--text-faint); background: var(--background-secondary); border: 1px solid var(--background-modifier-border); border-radius: 4px; padding: 0 6px; }
 .ribbon-organizer-rg-missing { font-size: var(--font-ui-smaller); color: var(--text-faint); }
 .ribbon-organizer-rg-badge { margin-left: 4px; padding: 1px 7px; border-radius: 8px;
   font-size: var(--font-ui-smaller); color: var(--text-muted); background: var(--background-modifier-border); }
@@ -142,8 +142,12 @@
 .ribbon-organizer-sb-strip-label { font-size: var(--font-ui-smaller); color: var(--text-faint);
   text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
 /* The strip reuses the status-bar class so theme/plugin item CSS styles the clones, then
- * re-asserts plain in-panel layout (core hides/floats the real bar on some platforms). */
-.status-bar.ribbon-organizer-sb-strip { display: flex; position: static; width: 100%; max-width: none;
+ * re-asserts plain in-panel layout (core hides/floats the real bar on some platforms).
+ * relative, not static: the strip must be the containing block for plugin abspos children
+ * (workspaces-plus's icon) — anchored outside the settings scroller they stay put while
+ * the strip scrolls away. !important because .status-bar position is a battleground:
+ * quick-explorer forces it static from a body-level selector that outguns two classes. */
+.status-bar.ribbon-organizer-sb-strip { display: flex; position: relative !important; width: 100%; max-width: none;
   flex-wrap: wrap; justify-content: flex-end; align-items: center;
   border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m);
   background: var(--background-secondary); padding: 4px 10px; margin-bottom: 8px; transform: none; }
@@ -156,14 +160,34 @@
 .status-bar-item.ribbon-organizer-sb-icononly { font-size: 0; letter-spacing: 0; }
 .status-bar-item.ribbon-organizer-sb-icononly svg,
 .status-bar-item.ribbon-organizer-sb-icononly .svg-icon { width: var(--icon-s, 16px); height: var(--icon-s, 16px); }
+/* Rule icons: one plugin-owned span before a rewritten text node (the rewrite engine's only
+   structural touch). Sized like Icon-only mode; solo = icon-only result, no text gap. */
+.ribbon-organizer-sb-ricon { display: inline-flex; align-items: center; vertical-align: middle; margin-right: 4px; }
+.ribbon-organizer-sb-ricon svg,
+.ribbon-organizer-sb-ricon .svg-icon { width: var(--icon-s, 16px); height: var(--icon-s, 16px); }
+.ribbon-organizer-sb-ricon-solo { margin-right: 0; }
 /* Customize modal */
 .ribbon-organizer-sbm-sec { font-size: var(--font-ui-smaller); color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin: 14px 0 6px; }
 .ribbon-organizer-sbm-modes { display: flex; gap: 6px; }
 .ribbon-organizer-sbm-pill.is-selected { border-color: var(--interactive-accent); color: var(--text-normal); }
-.ribbon-organizer-sbm-seen { display: flex; flex-wrap: wrap; gap: 6px; }
+.ribbon-organizer-sbm-seen { display: flex; flex-direction: column; gap: 4px; }
+.ribbon-organizer-sbm-seenrow { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ribbon-organizer-sbm-seenrow .ribbon-organizer-sbm-chip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; flex: none; }
+.ribbon-organizer-sbm-result { display: inline-flex; align-items: center; gap: 5px; font-size: var(--font-ui-smaller); color: var(--text-muted); border: 1px solid var(--background-modifier-border); border-radius: 5px; padding: 2px 8px; min-height: 22px; min-width: 0; overflow: hidden; }
+.ribbon-organizer-sbm-result.is-asis { border-style: dashed; color: var(--text-faint); }
+.ribbon-organizer-sbm-result-icon { display: inline-flex; align-items: center; }
+.ribbon-organizer-sbm-result-icon svg,
+.ribbon-organizer-sbm-result-icon .svg-icon { width: var(--icon-s, 16px); height: var(--icon-s, 16px); }
 .ribbon-organizer-sbm-chip { font-size: var(--font-ui-smaller); border: 1px dashed var(--background-modifier-border); background: var(--background-primary); border-radius: 5px; padding: 2px 8px; box-shadow: none; height: auto; }
 .ribbon-organizer-sbm-rule { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
 .ribbon-organizer-sbm-rule input { flex: 1; font-family: var(--font-monospace); font-size: var(--font-ui-smaller); }
+.ribbon-organizer-sbm-iconbtn { position: relative; flex: none; width: 30px; height: 30px; padding: 0; display: inline-flex; align-items: center; justify-content: center; }
+.ribbon-organizer-sbm-iconbtn.is-unset { border: 1px dashed var(--background-modifier-border); background: var(--background-primary); box-shadow: none; color: var(--text-faint); }
+.ribbon-organizer-sbm-iconbtn svg,
+.ribbon-organizer-sbm-iconbtn .svg-icon { width: var(--icon-s, 16px); height: var(--icon-s, 16px); }
+.ribbon-organizer-sbm-iconclear { position: absolute; top: -6px; right: -6px; width: 14px; height: 14px; border-radius: 50%; background: var(--background-modifier-border); color: var(--text-muted); display: none; align-items: center; justify-content: center; }
+.ribbon-organizer-sbm-iconclear svg { width: 9px; height: 9px; }
+.ribbon-organizer-sbm-iconbtn:hover .ribbon-organizer-sbm-iconclear { display: inline-flex; }
 .ribbon-organizer-sbm-arrow { color: var(--text-faint); flex: none; }
 .ribbon-organizer-sbm-addbar { margin-top: 8px; }
 .ribbon-organizer-sbm-note { margin-top: 12px; color: var(--text-faint); font-size: var(--font-ui-smaller); }

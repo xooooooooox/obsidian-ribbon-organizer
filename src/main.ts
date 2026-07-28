@@ -143,7 +143,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
   // Per Text node: the raw value we transformed and the value we wrote. A node whose data
   // equals `written` is our own write (skip — kills observer loops and oscillating rules);
   // restore paths put `original` back while `written` still stands.
-  private statusBarNodeMemo = new WeakMap<Text, { original: string; written: string }>();
+  private statusBarNodeMemo = new WeakMap<Text, { original: string; written: string; iconEl?: HTMLElement }>();
   private statusBarSeenTimer: number | null = null;
 
   async onload(): Promise<void> {
@@ -401,27 +401,70 @@ export default class RibbonOrganizerPlugin extends Plugin {
   }
 
   // Rewrites one item's Text nodes per its rules, feeds seen-learning with raw values, and
-  // (Compact mode) keeps the hover title = raw text. Fail-open: unmatched nodes untouched.
+  // (Compact mode) keeps the hover title = raw text. A matched rule with an icon gets a
+  // plugin-owned span immediately before the text node — the engine's only structural
+  // touch; everything else stays text-node-scoped. Fail-open: unmatched nodes untouched.
+  // A node whose rules stopped producing output is restored here in place (the observer
+  // teardown only restores when an item loses ALL rules), so icon edits and rule deletions
+  // take effect without an element rebuild.
   private rewriteStatusBarItem(id: string, el: HTMLElement): void {
     const rules = this.settings.statusBarRules[id] ?? [];
     let rawFull = "";
     for (const node of this.textNodesOf(el)) {
       const memo = this.statusBarNodeMemo.get(node);
-      if (memo !== undefined && node.data === memo.written) {
-        rawFull += memo.original; // our own write — skip, but keep the raw text intact
+      const prior = memo !== undefined && node.data === memo.written ? memo : undefined;
+      if (memo !== undefined && prior === undefined) {
+        // The plugin overwrote our rewrite in place: its text wins, and the icon span that
+        // decorated the stale rewrite must not survive it (a fresh match re-creates one).
+        memo.iconEl?.remove();
+        this.statusBarNodeMemo.delete(node);
+      }
+      const raw = prior === undefined ? node.data : prior.original;
+      rawFull += raw;
+      if (prior === undefined) this.learnStatusBarText(id, raw);
+      if (rules.length === 0) {
+        // Rules emptied while our write still stands: restore here — a Compact item keeps
+        // its observer (hover-title tracking), so the teardown restore never fires for it.
+        if (prior !== undefined) {
+          prior.iconEl?.remove();
+          this.statusBarNodeMemo.delete(node);
+          node.data = raw;
+        }
         continue;
       }
-      const raw = node.data;
-      rawFull += raw;
-      this.learnStatusBarText(id, raw);
-      if (rules.length === 0) continue;
       const out = applyStatusBarRules(raw, rules);
-      if (out !== raw) {
-        this.statusBarNodeMemo.set(node, { original: raw, written: out });
-        node.data = out;
+      if (out.text === raw && out.icon === null) {
+        if (prior !== undefined) {
+          prior.iconEl?.remove();
+          this.statusBarNodeMemo.delete(node);
+          node.data = raw;
+        }
+        continue;
       }
+      const iconEl = this.syncRuleIconSpan(node, prior?.iconEl, out.icon, out.text === "");
+      if (iconEl === undefined) this.statusBarNodeMemo.set(node, { original: raw, written: out.text });
+      else this.statusBarNodeMemo.set(node, { original: raw, written: out.text, iconEl });
+      if (node.data !== out.text) node.data = out.text;
     }
     if (this.settings.statusBarModes[id] === "compact") el.title = rawFull.replace(/\s+/g, " ").trim();
+  }
+
+  // The plugin-owned icon span for one rewritten node: created (or moved back) to sit
+  // immediately before the text node, re-rendered only when the icon id changes, removed
+  // when the matched rule carries no icon. Solo (empty rewritten text) drops the text gap.
+  private syncRuleIconSpan(node: Text, existing: HTMLElement | undefined, icon: string | null, solo: boolean): HTMLElement | undefined {
+    if (icon === null) {
+      existing?.remove();
+      return undefined;
+    }
+    const span = existing !== undefined && existing.isConnected ? existing : createSpan({ cls: "ribbon-organizer-sb-ricon" });
+    if (span.nextSibling !== node) node.before(span);
+    if (span.getAttribute("data-ricon") !== icon) {
+      renderIcon(span, icon, undefined, this.app);
+      span.setAttribute("data-ricon", icon);
+    }
+    span.toggleClass("ribbon-organizer-sb-ricon-solo", solo);
+    return span;
   }
 
   // Seen-state learning. Only a genuinely new value schedules a (debounced) save, so
@@ -441,11 +484,15 @@ export default class RibbonOrganizerPlugin extends Plugin {
   }
 
   // Best-effort undo of our rewrites on one element: nodes the plugin has since overwritten
-  // keep the plugin's newer text (its next update wins anyway).
+  // keep the plugin's newer text (its next update wins anyway), but our icon spans and memo
+  // entries are removed unconditionally — a span must never outlive the teardown that owns it.
   private restoreStatusBarText(el: HTMLElement): void {
     for (const node of this.textNodesOf(el)) {
       const memo = this.statusBarNodeMemo.get(node);
-      if (memo !== undefined && node.data === memo.written) node.data = memo.original;
+      if (memo === undefined) continue;
+      memo.iconEl?.remove();
+      if (node.data === memo.written) node.data = memo.original;
+      this.statusBarNodeMemo.delete(node);
     }
   }
 
