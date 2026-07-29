@@ -133,6 +133,12 @@
 .ribbon-organizer-sb-hint.is-drop-target { box-shadow: inset 0 2px 0 var(--interactive-accent); }
 .is-phone .ribbon-organizer-sb-item .ribbon-organizer-rg-plugin,
 .is-phone .ribbon-organizer-sb-preview { display: none; }
+/* Preview text / plugin chip / status notes carry the row's auto margin on desktop; with the
+ * preview and chip display-none on phones the buttons take over right-alignment (mirrors the
+ * groups-tab rule above) and the notes follow the title instead. Missing rows render no
+ * buttons, so .ribbon-organizer-sb-missing keeps its own auto margin. */
+.is-phone .ribbon-organizer-sb-item .ribbon-organizer-rg-btns { margin-left: auto; }
+.is-phone .ribbon-organizer-sb-notshown, .is-phone .ribbon-organizer-sb-pintag { margin-left: 0; }
 .ribbon-organizer-sb-item.is-hidden .ribbon-organizer-sb-title,
 .ribbon-organizer-sb-item.is-hidden .ribbon-organizer-sb-preview { color: var(--text-faint); }
 .ribbon-organizer-sb-item.is-hovered { background: var(--background-modifier-hover); box-shadow: inset 2px 0 0 var(--interactive-accent); }
