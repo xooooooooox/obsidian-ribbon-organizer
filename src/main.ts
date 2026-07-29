@@ -364,12 +364,16 @@ export default class RibbonOrganizerPlugin extends Plugin {
       const mode = this.settings.statusBarModes[id];
       el.setCssStyles({
         order: order === undefined ? "" : String(order),
-        display: hidden.has(id) ? "none" : "",
+        display: "", // clears an inline hide left by pre-0.14.2 builds (items outlive our reload)
         maxWidth: mode === "compact" ? "12em" : "",
         overflow: mode === "compact" ? "hidden" : "",
         textOverflow: mode === "compact" ? "ellipsis" : "",
         whiteSpace: mode === "compact" ? "nowrap" : "",
       });
+      // Hide via class, never inline display: item owners (core backlink/word count, git…)
+      // rewrite their own inline display on every leaf change, which erased an inline hide
+      // and this observer (childList only) never saw it. The class survives those writes.
+      el.toggleClass("ribbon-organizer-sb-hidden", hidden.has(id));
       el.toggleClass("ribbon-organizer-sb-icononly", mode === "icon");
       if (mode !== "compact") el.removeAttribute("title");
       this.rewriteStatusBarItem(id, el); // rules + seen sampling + compact title, every apply
