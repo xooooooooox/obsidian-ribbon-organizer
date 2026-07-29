@@ -291,7 +291,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
     if (container === null) {
       this.statusBarDisabled = true;
       console.error("Ribbon Organizer: app.statusBar does not match the expected shape; status bar ordering is disabled for this session");
-      new Notice("Ribbon & Status Bar Organizer: status bar tools don't work on this Obsidian version — the bar is left untouched. Check for a plugin update.");
+      new Notice("Ribbon and Status Bar Organizer: status bar tools don't work on this Obsidian version — the bar is left untouched. Check for a plugin update.");
       return null;
     }
     const els = Array.from(container.children).filter(
@@ -621,7 +621,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
         rebuildCmdrStyle(access.plugin.settings.hide);
       } else if (access.state === "broken") {
         console.error("Ribbon Organizer: Commander settings do not match the expected shape; changed this plugin's own hide layer only");
-        new Notice("Ribbon & Status Bar Organizer: couldn't update Commander — this item may stay hidden by Commander. Show it from Commander's settings.");
+        new Notice("Ribbon and Status Bar Organizer: couldn't update Commander — this item may stay hidden by Commander. Show it from Commander's settings.");
       }
     }
     await this.saveSettings();
@@ -654,7 +654,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
     if (internals === null) {
       this.groupingDisabled = true;
       console.error("Ribbon Organizer: app.workspace.leftRibbon does not match the expected shape; ribbon grouping is disabled for this session");
-      new Notice("Ribbon & Status Bar Organizer: ribbon grouping doesn't work on this Obsidian version — the ribbon is left untouched. Check for a plugin update.");
+      new Notice("Ribbon and Status Bar Organizer: ribbon grouping doesn't work on this Obsidian version — the ribbon is left untouched. Check for a plugin update.");
       return;
     }
     // Disconnect while we write so our own DOM edits cannot re-trigger the observer.
@@ -732,14 +732,14 @@ export default class RibbonOrganizerPlugin extends Plugin {
       this.applyGrouping();
     } else {
       console.error("Ribbon Organizer: leftRibbon.onChange is missing; the native hide flag was not changed");
-      new Notice("Ribbon & Status Bar Organizer: couldn't change this icon's visibility on this Obsidian version. Check for a plugin update.");
+      new Notice("Ribbon and Status Bar Organizer: couldn't change this icon's visibility on this Obsidian version. Check for a plugin update.");
     }
     const title = typeof raw.title === "string" ? raw.title : itemId.slice(itemId.indexOf(":") + 1);
     const access = cmdrAccess(this.app);
     if (access.state === "absent") return;
     if (access.state === "broken") {
       console.error("Ribbon Organizer: Commander settings do not match the expected shape; changed the native hide only");
-      new Notice("Ribbon & Status Bar Organizer: couldn't update Commander — the change applies in Obsidian, but Commander may still hide this icon.");
+      new Notice("Ribbon and Status Bar Organizer: couldn't update Commander — the change applies in Obsidian, but Commander may still hide this icon.");
       return;
     }
     access.plugin.settings.hide.leftRibbon = withTitle(access.plugin.settings.hide.leftRibbon, title, hidden);
@@ -849,10 +849,10 @@ export default class RibbonOrganizerPlugin extends Plugin {
       await navigator.clipboard.writeText(JSON.stringify(diagnostics, null, 2));
     } catch (error) {
       console.error("Ribbon Organizer: clipboard write failed", error);
-      new Notice("Ribbon & Status Bar Organizer: couldn't copy diagnostics to the clipboard.");
+      new Notice("Ribbon and Status Bar Organizer: couldn't copy diagnostics to the clipboard.");
       return;
     }
-    new Notice("Ribbon & Status Bar Organizer: diagnostics copied to clipboard.");
+    new Notice("Ribbon and Status Bar Organizer: diagnostics copied to clipboard.");
   }
 
   // Re-applies when icons are added/removed (late-loading plugins, plugins rebuilding their own
@@ -907,7 +907,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
     }).commands;
     const entries = quickMenuEntries(quickMenu.entries, (id) => id in commands.commands);
     if (entries.length === 0) {
-      menu.addItem((i) => i.setTitle("No commands yet — add them under Quick menus in Ribbon & Status Bar Organizer settings").setDisabled(true));
+      menu.addItem((i) => i.setTitle("No commands yet — add them under Quick menus in Ribbon and Status Bar Organizer settings").setDisabled(true));
     }
     for (const e of entries) {
       if (e.kind === "separator") {

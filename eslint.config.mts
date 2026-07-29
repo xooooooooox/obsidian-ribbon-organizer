@@ -31,7 +31,7 @@ export default defineConfig(
 	},
 	...obsidianmd.configs.recommended,
 	{
-		// "Ribbon & Status Bar Organizer" is the plugin's proper-noun name; the sentence-case
+		// "Ribbon and Status Bar Organizer" is the plugin's proper-noun name; the sentence-case
 		// rule's `brands` option preserves brand casing instead of flagging it. Since `brands`
 		// replaces rather than merges the rule's own default list, "Obsidian" is repeated
 		// here too so it keeps its default exemption. enforceCamelCaseLower mirrors the
@@ -41,7 +41,7 @@ export default defineConfig(
 		// is the settings tab's displayed name, referenced mid-sentence in the empty-menu
 		// placeholder.
 		rules: {
-			'obsidianmd/ui/sentence-case': ['warn', { brands: ['Ribbon & Status Bar Organizer', 'Obsidian', 'Ungrouped', 'Commander', 'Quick menus'], enforceCamelCaseLower: true }],
+			'obsidianmd/ui/sentence-case': ['warn', { brands: ['Ribbon and Status Bar Organizer', 'Obsidian', 'Ungrouped', 'Commander', 'Quick menus'], enforceCamelCaseLower: true }],
 		},
 	},
 	{

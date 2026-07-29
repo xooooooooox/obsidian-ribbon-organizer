@@ -1,6 +1,6 @@
-<p align="center"><img src="assets/logo.svg" width="96" alt="Ribbon & Status Bar Organizer logo"></p>
+<p align="center"><img src="assets/logo.svg" width="96" alt="Ribbon and Status Bar Organizer logo"></p>
 
-# Ribbon & Status Bar Organizer
+# Ribbon and Status Bar Organizer
 
 [![release](https://img.shields.io/github/v/release/xooooooooox/obsidian-ribbon-organizer?label=release)](https://github.com/xooooooooox/obsidian-ribbon-organizer/releases/latest)
 [![downloads](https://img.shields.io/github/downloads/xooooooooox/obsidian-ribbon-organizer/total?label=downloads)](https://github.com/xooooooooox/obsidian-ribbon-organizer/releases)
@@ -25,7 +25,7 @@
 
 ## 快速上手
 
-1. 打开 **设置 → Ribbon & Status Bar Organizer → Ribbon**:新建分组并把图标拖进去——ribbon 上相邻非空分组之间会出现分隔线。
+1. 打开 **设置 → Ribbon and Status Bar Organizer → Ribbon**:新建分组并把图标拖进去——ribbon 上相邻非空分组之间会出现分隔线。
 2. 点击任意一行的眼睛开关,即可在所有位置隐藏/显示该图标。
 3. 切到 **Quick menus** 标签页:新建菜单并添加命令——菜单会以独立 ribbon 图标的形式出现。
 

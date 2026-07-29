@@ -1,13 +1,13 @@
 # Design
 
-The visual and copy language of Ribbon & Status Bar Organizer. New UI is measured against this file; when a rule here and the code disagree, one of them is wrong — fix whichever it is, in the same change.
+The visual and copy language of Ribbon and Status Bar Organizer. New UI is measured against this file; when a rule here and the code disagree, one of them is wrong — fix whichever it is, in the same change.
 
 ## Voice
 
 - Copy speaks the user's language, never the implementation's. No internal identifiers (`data.json`, observer, CSS classes, setting keys) in any user-visible string. The one developer-facing surface is the "Copy ribbon diagnostics" command, which may name JSON.
 - Narrate by device and consequence ("Not on this device", "stays hidden"), not by mechanism.
 - Controls say what happens; notices confirm what happened; errors say what failed and what to do next.
-- Sentence case throughout. Brand casing is preserved: Ribbon & Status Bar Organizer, Obsidian, Commander, Iconize, Ungrouped.
+- Sentence case throughout. Brand casing is preserved: Ribbon and Status Bar Organizer, Obsidian, Commander, Iconize, Ungrouped.
 
 ## Icons
 

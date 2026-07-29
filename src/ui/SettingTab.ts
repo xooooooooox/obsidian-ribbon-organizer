@@ -34,7 +34,7 @@ export class RibbonOrganizerSettingTab extends PluginSettingTab {
   getSettingDefinitions(): SettingDefinitionItem[] {
     return [
       {
-        name: "Ribbon & Status Bar Organizer",
+        name: "Ribbon and Status Bar Organizer",
         desc: "Organize the ribbon and status bar: group icons, hide clutter, reorder items, and launch commands from ribbon menus.",
         aliases: ["ribbon groups", "quick menus", "quick commands", "divider", "separator", "reorder", "menu", "hide", "status bar", "statusbar", "mobile status bar", "rewrite", "compact", "icon only", "not shown"],
         render: (setting) => {

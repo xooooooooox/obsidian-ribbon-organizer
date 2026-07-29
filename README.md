@@ -1,6 +1,6 @@
-<p align="center"><img src="assets/logo.svg" width="96" alt="Ribbon & Status Bar Organizer logo"></p>
+<p align="center"><img src="assets/logo.svg" width="96" alt="Ribbon and Status Bar Organizer logo"></p>
 
-# Ribbon & Status Bar Organizer
+# Ribbon and Status Bar Organizer
 
 [![release](https://img.shields.io/github/v/release/xooooooooox/obsidian-ribbon-organizer?label=release)](https://github.com/xooooooooox/obsidian-ribbon-organizer/releases/latest)
 [![downloads](https://img.shields.io/github/downloads/xooooooooox/obsidian-ribbon-organizer/total?label=downloads)](https://github.com/xooooooooox/obsidian-ribbon-organizer/releases)
@@ -25,7 +25,7 @@ Via [BRAT](https://github.com/TfTHacker/obsidian42-brat): add `xooooooooox/obsid
 
 ## Quick start
 
-1. Open **Settings → Ribbon & Status Bar Organizer → Ribbon**: create a group and drag icons into it — dividers appear on the ribbon between adjacent non-empty groups.
+1. Open **Settings → Ribbon and Status Bar Organizer → Ribbon**: create a group and drag icons into it — dividers appear on the ribbon between adjacent non-empty groups.
 2. Use the eye toggle on any row to hide or show that icon everywhere.
 3. Switch to the **Quick menus** tab: create a menu and add commands — the menu appears as its own ribbon icon.
 
