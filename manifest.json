@@ -1,7 +1,7 @@
 {
 	"id": "ribbon-organizer",
 	"name": "Ribbon and Status Bar Organizer",
-	"version": "0.16.0",
+	"version": "0.16.1",
 	"minAppVersion": "1.8.7",
 	"description": "Organize the ribbon and status bar: group icons, hide clutter, reorder items, and launch commands from ribbon menus.",
 	"author": "xooooooooox",
