@@ -12,11 +12,13 @@ export interface RibbonGroup {
 export interface LiveRibbonItem {
   id: string;
   hidden: boolean; // Obsidian's native right-click hide
+  tucked: boolean; // collapsed into the more menu; honored for sentinel members only
 }
 
 export interface RibbonLayout {
   orders: Map<string, number>; // item id -> flex order (every live id gets one)
   dividerOrders: number[];     // flex order values for divider elements
+  moreOrder: number | null;    // flex order for the more button; null = no tucked visible sentinel member
 }
 
 export function defaultGroups(): RibbonGroup[] {
@@ -59,6 +61,7 @@ export function computeRibbonLayout(groups: RibbonGroup[], live: LiveRibbonItem[
   const liveById = new Map(live.map((i) => [i.id, i]));
   const orders = new Map<string, number>();
   const dividerOrders: number[] = [];
+  let moreOrder: number | null = null;
   let next = 1;
   let anyVisibleBefore = false;
   for (const group of groups) {
@@ -69,9 +72,18 @@ export function computeRibbonLayout(groups: RibbonGroup[], live: LiveRibbonItem[
     const visible = memberIds.some((id) => liveById.get(id)?.hidden === false);
     if (visible && anyVisibleBefore) dividerOrders.push(next++);
     for (const id of memberIds) orders.set(id, next++);
+    // The more button stands at the end of the sentinel run; a tucked, non-hidden member is
+    // what makes it exist. Tucked flags on claimed members are ignored (pruneTucked's belt).
+    if (group.id === UNGROUPED_ID) {
+      const anyTuckedVisible = memberIds.some((id) => {
+        const it = liveById.get(id);
+        return it !== undefined && !it.hidden && it.tucked;
+      });
+      if (anyTuckedVisible) moreOrder = next++;
+    }
     if (visible) anyVisibleBefore = true;
   }
-  return { orders, dividerOrders };
+  return { orders, dividerOrders, moreOrder };
 }
 
 export type MenuRow = { kind: "item"; id: string } | { kind: "separator" };
@@ -96,6 +108,28 @@ export function computeMenuRows(groups: RibbonGroup[], live: LiveRibbonItem[]): 
     anyVisibleBefore = true;
   }
   return rows;
+}
+
+export const DEFAULT_MORE_ICON = "ellipsis";
+
+// Defensive read of our own data.json: unique strings only, anything else dropped.
+export function normalizeMoreTucked(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  const out: string[] = [];
+  for (const v of raw) {
+    if (typeof v === "string" && !out.includes(v)) out.push(v);
+  }
+  return out;
+}
+
+export function normalizeMoreIcon(raw: unknown): string {
+  return typeof raw === "string" && raw !== "" ? raw : DEFAULT_MORE_ICON;
+}
+
+// Tucking is only meaningful for unclaimed (Ungrouped) icons: a group claim wins and un-tucks.
+export function pruneTucked(groups: RibbonGroup[], moreTucked: string[]): string[] {
+  const claimed = new Set<string>(groups.flatMap((g) => (g.id === UNGROUPED_ID ? [] : g.items)));
+  return moreTucked.filter((id) => !claimed.has(id));
 }
 
 function requireGroupIndex(groups: RibbonGroup[], groupId: string): number {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_MORE_ICON,
   RibbonGroup,
   UNGROUPED_ID,
   addGroup,
@@ -10,13 +11,16 @@ import {
   moveGroup,
   moveItemToGroup,
   normalizeGroups,
+  normalizeMoreIcon,
+  normalizeMoreTucked,
+  pruneTucked,
   renameGroup,
 } from "../src/core/ribbonGroups";
 
 const g = (id: string, items: string[]): RibbonGroup => ({ id, name: id, items });
 const g2 = (id: string, name: string, items: string[]): RibbonGroup => ({ id, name, items });
 const ungrouped = (): RibbonGroup => ({ id: UNGROUPED_ID, name: "Ungrouped", items: [] });
-const live = (id: string, hidden = false) => ({ id, hidden });
+const live = (id: string, hidden = false, tucked = false) => ({ id, hidden, tucked });
 
 describe("computeRibbonLayout", () => {
   it("orders claimed items by group walk and unclaimed into the sentinel slot", () => {
@@ -152,10 +156,10 @@ describe("computeMenuRows", () => {
 
   it("lists visible members in group order with separators between non-empty groups", () => {
     const live = [
-      { id: "p:three", hidden: false },
-      { id: "p:one", hidden: false },
-      { id: "p:free", hidden: false },
-      { id: "p:two", hidden: false },
+      { id: "p:three", hidden: false, tucked: false },
+      { id: "p:one", hidden: false, tucked: false },
+      { id: "p:free", hidden: false, tucked: false },
+      { id: "p:two", hidden: false, tucked: false },
     ];
     expect(computeMenuRows(groups, live)).toEqual([
       { kind: "item", id: "p:one" },
@@ -169,10 +173,10 @@ describe("computeMenuRows", () => {
 
   it("omits hidden items and emits no separator around all-hidden groups", () => {
     const live = [
-      { id: "p:one", hidden: true },
-      { id: "p:two", hidden: true },
-      { id: "p:free", hidden: false },
-      { id: "p:three", hidden: false },
+      { id: "p:one", hidden: true, tucked: false },
+      { id: "p:two", hidden: true, tucked: false },
+      { id: "p:free", hidden: false, tucked: false },
+      { id: "p:three", hidden: false, tucked: false },
     ];
     expect(computeMenuRows(groups, live)).toEqual([
       { kind: "item", id: "p:free" },
@@ -182,6 +186,72 @@ describe("computeMenuRows", () => {
   });
 
   it("returns empty for no visible items", () => {
-    expect(computeMenuRows(groups, [{ id: "p:one", hidden: true }])).toEqual([]);
+    expect(computeMenuRows(groups, [{ id: "p:one", hidden: true, tucked: false }])).toEqual([]);
+  });
+});
+
+describe("computeRibbonLayout more button", () => {
+  it("emits moreOrder right after the sentinel members when a visible member is tucked", () => {
+    const groups = [g("a", ["p:1"]), ungrouped(), g("b", ["p:2"])];
+    const items = [live("p:1"), live("p:9", false, true), live("p:8"), live("p:2")];
+    const { orders, dividerOrders, moreOrder } = computeRibbonLayout(groups, items);
+    // a(1) divider(2) p:9(3) p:8(4) more(5) divider(6) p:2(7)
+    expect(orders.get("p:1")).toBe(1);
+    expect(orders.get("p:9")).toBe(3);
+    expect(orders.get("p:8")).toBe(4);
+    expect(moreOrder).toBe(5);
+    expect(dividerOrders).toEqual([2, 6]);
+    expect(orders.get("p:2")).toBe(7);
+  });
+
+  it("moreOrder is null when nothing is tucked", () => {
+    const groups = [g("a", ["p:1"]), ungrouped()];
+    const { moreOrder } = computeRibbonLayout(groups, [live("p:1"), live("p:9")]);
+    expect(moreOrder).toBeNull();
+  });
+
+  it("moreOrder is null when the only tucked member is hidden", () => {
+    const groups = [ungrouped()];
+    const { moreOrder } = computeRibbonLayout(groups, [live("p:9", true, true)]);
+    expect(moreOrder).toBeNull();
+  });
+
+  it("a fully tucked (non-hidden) sentinel still earns its divider", () => {
+    const groups = [g("a", ["p:1"]), ungrouped()];
+    const { dividerOrders, moreOrder } = computeRibbonLayout(groups, [live("p:1"), live("p:9", false, true)]);
+    expect(dividerOrders).toHaveLength(1);
+    expect(moreOrder).not.toBeNull();
+  });
+
+  it("ignores tucked on claimed members", () => {
+    const groups = [g("a", ["p:1"]), ungrouped()];
+    const { moreOrder } = computeRibbonLayout(groups, [live("p:1", false, true)]);
+    expect(moreOrder).toBeNull();
+  });
+
+  it("keeps the every-live-id-gets-an-order invariant with tucked members", () => {
+    const groups = [ungrouped()];
+    const { orders } = computeRibbonLayout(groups, [live("p:9", false, true), live("p:8")]);
+    expect([...orders.keys()].sort()).toEqual(["p:8", "p:9"]);
+  });
+});
+
+describe("more-menu settings normalizers", () => {
+  it("normalizeMoreTucked keeps unique strings, else empty", () => {
+    expect(normalizeMoreTucked(undefined)).toEqual([]);
+    expect(normalizeMoreTucked("junk")).toEqual([]);
+    expect(normalizeMoreTucked(["p:1", 42, "p:1", "p:2"])).toEqual(["p:1", "p:2"]);
+  });
+
+  it("normalizeMoreIcon defaults to ellipsis", () => {
+    expect(normalizeMoreIcon(undefined)).toBe(DEFAULT_MORE_ICON);
+    expect(normalizeMoreIcon("")).toBe("ellipsis");
+    expect(normalizeMoreIcon(7)).toBe("ellipsis");
+    expect(normalizeMoreIcon("menu")).toBe("menu");
+  });
+
+  it("pruneTucked drops claimed ids, keeps unclaimed, preserves order", () => {
+    const groups = [g("a", ["p:1"]), ungrouped()];
+    expect(pruneTucked(groups, ["p:9", "p:1", "p:8"])).toEqual(["p:9", "p:8"]);
   });
 });

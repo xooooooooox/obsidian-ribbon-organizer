@@ -27,8 +27,11 @@ All icons are lucide via `setIcon`, one icon per meaning, everywhere:
 | Unset icon placeholder | `plus` |
 | Display modes full / compact / icon-only | `text` / `ellipsis` / `circle-dot` — single source `MODE_ICON` (src/ui/statusBarMode.ts); row button and modal pill must stay visually identical |
 | Settings tabs Ribbon / Quick menus / Status bar | `rows-3` / `menu` / `panel-bottom` |
+| Tuck state on Ungrouped rows | `chevrons-up-down` / `chevrons-down-up` — outward = "Tuck into the menu", inward (lit `--text-accent`) = "Show on the ribbon" |
+| More button default icon | `ellipsis` — user-replaceable via the icon picker |
 
 - The brand icon `ribbon-organizer` (src/core/icons.ts) is drawn on a 100×100 grid with stroke weight matched to 24px lucide; it is the default icon for new quick menus and is listed in the icon picker.
+- Dashed 1px border (`--background-modifier-border-hover`) on the Ungrouped header's icon slot = "this icon slot is editable" affordance, distinct from the unset-value dashed border under States.
 - Icon rendering always goes through the chain in src/ui/iconRender.ts: lucide → Iconize pack (normalized to native metrics) → command default → `command` fallback.
 - Icon sizing uses the `--icon-size` container variable (18 / 16 / 14px tiers) or `var(--icon-s, 16px)`; no hard-coded pixel sizes.
 
@@ -71,3 +74,4 @@ All icons are lucide via `setIcon`, one icon per meaning, everywhere:
 - Pickers are `FuzzySuggestModal`s that render an icon preview next to each suggestion.
 - Every section re-render goes through `withScrollPreserved`.
 - Unset values (icon, color, seen chip before a rule applies) are expressed with dashed borders.
+- The more button is RO-owned ribbon chrome (divider lifecycle), never a registered ribbon item; its menu mirrors the quick-menu pattern (DOM menu, icon + title per row, click = the original icon's action). Hidden icons never appear in it; an empty menu means no button.

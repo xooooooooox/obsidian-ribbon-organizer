@@ -12,6 +12,7 @@ An [Obsidian](https://obsidian.md) plugin that organizes the left ribbon and lau
 ## Features
 
 - **Ribbon groups** — order the ribbon icons into named groups with a thin divider line between them; works on desktop, on the tablet drawer ribbon, and in the phone navbar ribbon menu (the ≡ button).
+- **Tuck Ungrouped icons into a menu** — mark any Ungrouped icon and it moves off the ribbon into one ⋯ button (icon customizable); click the button to reach them.
 - **Hide icons** — an eye toggle per icon that writes both Obsidian's native hide and [Commander](https://github.com/jsmorabito/obsidian-commander)'s hide list, so the three UIs never disagree.
 - **Quick menus** — any number of extra ribbon icons, each opening its own command list; entries carry editable labels and icons (including [Iconize](https://github.com/FlorianWoelki/obsidian-iconize) packs and the plugin's built-in `ribbon-organizer` icon) and can be grouped with separators.
 - **Status bar** — drag the status bar items into your own order, hide the ones you don't need, shorten noisy ones (compact and icon-only modes, plus rewrite rules like `Successfully synced {time}` → `✓ {time}` — a rule can also add an icon and give the icon and text their own colors), watch it all in a live preview, and optionally show the status bar on phones and tablets as a floating pill.

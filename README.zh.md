@@ -12,6 +12,7 @@
 ## 功能特性
 
 - **Ribbon 分组** —— 把 ribbon 图标编排进命名分组,相邻非空分组之间渲染一条细分隔线;桌面端、平板抽屉式 ribbon、手机导航栏 ribbon 菜单(≡ 按钮)全部支持。
+- **把 Ungrouped 图标收进菜单** — 勾选任意 Ungrouped 图标,它就从 ribbon 收进一个 ⋯ 按钮(图标可自定义);点按钮即可使用。
 - **隐藏图标** —— 每个图标一个眼睛开关,同时写入 Obsidian 原生隐藏和 [Commander](https://github.com/jsmorabito/obsidian-commander) 的隐藏列表,三处 UI 永远保持一致。
 - **Quick menus** —— 任意数量的额外 ribbon 图标,每个点开各自的命令列表;条目可设置标签和图标(支持 [Iconize](https://github.com/FlorianWoelki/obsidian-iconize) 图标包与插件自带的 `ribbon-organizer` 图标),并可用分隔线分组。
 - **状态栏** — 拖拽排序、眼睛隐藏、收纳吵闹的条目(紧凑/仅图标两档显示模式,以及 `Successfully synced {time}` → `✓ {time}` 这样的重写规则——规则还可以配一个图标,并给图标和文本分别指定颜色),内置实时预览;还可选择在手机和平板上以浮动胶囊的形式显示状态栏。

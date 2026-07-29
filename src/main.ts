@@ -3,7 +3,7 @@ import { CmdrHideLists, cmdrHideStyleText, withTitle } from "./core/commanderHid
 import { BRAND_ICON_ID, BRAND_ICON_SVG } from "./core/icons";
 import { quickMenuEntries } from "./core/quickCommands";
 import { defaultMenus, normalizeMenus } from "./core/quickMenus";
-import { RibbonGroup, computeMenuRows, computeRibbonLayout, defaultGroups, normalizeGroups } from "./core/ribbonGroups";
+import { RibbonGroup, UNGROUPED_ID, computeMenuRows, computeRibbonLayout, defaultGroups, normalizeGroups, normalizeMoreIcon, normalizeMoreTucked, pruneTucked } from "./core/ribbonGroups";
 import { cmdrHiddenSiblings, computeStatusBarOrder, deriveStatusBarIds, normalizeStatusBarOrder, splitStatusBarId } from "./core/statusBarItems";
 import { SEEN_CAP, StatusBarRule, applyStatusBarRules, normalizeStatusBarModes, normalizeStatusBarRules, normalizeStatusBarSeen, pushSeen } from "./core/statusBarRules";
 import { QuickMenu } from "./core/types";
@@ -15,6 +15,8 @@ const SEEN_STORAGE_KEY = "ribbon-organizer-status-bar-seen";
 interface RibbonOrganizerSettings {
   menus: QuickMenu[];             // user-defined ribbon menus: one composite ribbon icon each
   groups: RibbonGroup[];          // top-to-bottom ribbon group order (includes the ungrouped sentinel)
+  moreTucked: string[];           // ribbon item ids tucked into the more menu (Ungrouped members only; a group claim un-tucks)
+  moreIcon: string;               // icon id for the more button; "ellipsis" until customized
   statusBarOrder: string[];       // status bar item ids, left-to-right; [] = never reordered, bar stays native
   statusBarHidden: string[];      // item ids hidden by this plugin's own layer (Commander's plugin-level hides merge in at read time)
   statusBarShowOnMobile: boolean; // floating pill on phones/tablets (styles.css, body-class gated)
@@ -124,6 +126,8 @@ export default class RibbonOrganizerPlugin extends Plugin {
   settings: RibbonOrganizerSettings = {
     menus: defaultMenus(),
     groups: defaultGroups(),
+    moreTucked: normalizeMoreTucked(undefined),
+    moreIcon: normalizeMoreIcon(undefined),
     statusBarOrder: [],
     statusBarHidden: [],
     statusBarShowOnMobile: false,
@@ -201,8 +205,13 @@ export default class RibbonOrganizerPlugin extends Plugin {
     }
     const internals = ribbonInternals(this.app);
     if (internals === null) return;
-    for (const item of internals.items) item.buttonEl?.setCssStyles({ order: "" });
-    for (const el of Array.from(internals.ribbonItemsEl.querySelectorAll(":scope > .ribbon-organizer-divider"))) el.remove();
+    for (const item of internals.items) {
+      item.buttonEl?.setCssStyles({ order: "" });
+      // Our stylesheet dies with the plugin, but the classes must not linger on foreign elements.
+      item.buttonEl?.removeClass("ribbon-organizer-cmdr-hidden");
+      item.buttonEl?.removeClass("ribbon-organizer-tucked");
+    }
+    for (const el of Array.from(internals.ribbonItemsEl.querySelectorAll(":scope > .ribbon-organizer-divider, :scope > .ribbon-organizer-more"))) el.remove();
   }
 
   async loadSettings(): Promise<void> {
@@ -210,6 +219,8 @@ export default class RibbonOrganizerPlugin extends Plugin {
       menus?: unknown;
       quickCommands?: unknown;
       groups?: unknown;
+      moreTucked?: unknown;
+      moreIcon?: unknown;
       statusBarOrder?: unknown;
       statusBarHidden?: unknown;
       statusBarShowOnMobile?: unknown;
@@ -217,9 +228,12 @@ export default class RibbonOrganizerPlugin extends Plugin {
       statusBarRules?: unknown;
       statusBarSeen?: unknown;
     };
+    const groups = normalizeGroups(raw.groups ?? defaultGroups());
     this.settings = {
       menus: normalizeMenus(raw.menus, raw.quickCommands), // pre-0.4.0 quickCommands migrates to one menu
-      groups: normalizeGroups(raw.groups ?? defaultGroups()),
+      groups,
+      moreTucked: pruneTucked(groups, normalizeMoreTucked(raw.moreTucked)),
+      moreIcon: normalizeMoreIcon(raw.moreIcon),
       statusBarOrder: normalizeStatusBarOrder(raw.statusBarOrder),
       statusBarHidden: normalizeStatusBarOrder(raw.statusBarHidden),
       statusBarShowOnMobile: raw.statusBarShowOnMobile === true,
@@ -646,22 +660,59 @@ export default class RibbonOrganizerPlugin extends Plugin {
     // Disconnect while we write so our own DOM edits cannot re-trigger the observer.
     this.ribbonObserver?.disconnect();
     const cmdrHidden = this.cmdrHiddenTitles();
+    const claimed = new Set(this.settings.groups.flatMap((g) => (g.id === UNGROUPED_ID ? [] : g.items)));
+    const tucked = new Set(this.settings.moreTucked.filter((id) => !claimed.has(id)));
     // An unmounted entry has no element to order, so it counts as hidden for the layout: it
     // gets no divider slot and cannot make a group visible.
     const layout = computeRibbonLayout(
       this.settings.groups,
-      internals.items.map((i) => ({ id: i.id, hidden: i.hidden || cmdrHidden.has(i.title) || i.buttonEl === null }))
+      internals.items.map((i) => ({ id: i.id, hidden: i.hidden || cmdrHidden.has(i.title) || i.buttonEl === null, tucked: tucked.has(i.id) }))
     );
     for (const item of internals.items) {
       if (item.buttonEl === null) continue;
       const order = layout.orders.get(item.id);
       item.buttonEl.setCssStyles({ order: order === undefined ? "" : String(order) });
+      // Element-anchored hide states: Commander's title-keyed CSS misses an icon whose plugin
+      // temporarily rewrites its aria-label (remotely-save while syncing) — a class on the
+      // element itself can't be pierced that way. Tucked icons leave the ribbon the same way.
+      item.buttonEl.toggleClass("ribbon-organizer-cmdr-hidden", cmdrHidden.has(item.title));
+      item.buttonEl.toggleClass("ribbon-organizer-tucked", tucked.has(item.id));
     }
-    for (const el of Array.from(internals.ribbonItemsEl.querySelectorAll(":scope > .ribbon-organizer-divider"))) el.remove();
+    for (const el of Array.from(internals.ribbonItemsEl.querySelectorAll(":scope > .ribbon-organizer-divider, :scope > .ribbon-organizer-more"))) el.remove();
     for (const dividerOrder of layout.dividerOrders) {
       internals.ribbonItemsEl.createDiv({ cls: "ribbon-organizer-divider" }).setCssStyles({ order: String(dividerOrder) });
     }
+    if (layout.moreOrder !== null) this.renderMoreButton(internals, tucked, cmdrHidden, layout.moreOrder);
     this.observeRibbon(internals.ribbonItemsEl);
+  }
+
+  // The more button is RO-owned ribbon chrome, like the dividers — never a registered ribbon
+  // item (registering one would list the button inside our own settings). Rebuilt every pass;
+  // the menu mirrors openMenu's DOM-mode + renderIcon pattern so iconize ids work.
+  private renderMoreButton(internals: RibbonInternals, tucked: Set<string>, cmdrHidden: Set<string>, order: number): void {
+    const entries = internals.items.filter((i) => tucked.has(i.id) && i.buttonEl !== null && !i.hidden && !cmdrHidden.has(i.title));
+    if (entries.length === 0) return; // hidden wins: nothing to open means no button
+    const btn = internals.ribbonItemsEl.createDiv({
+      cls: "side-dock-ribbon-action ribbon-organizer-more",
+      attr: { "aria-label": "More", "aria-label-position": "right" },
+    });
+    renderIcon(btn, this.settings.moreIcon, undefined, this.app);
+    btn.setCssStyles({ order: String(order) });
+    btn.addEventListener("click", () => {
+      const menu = new Menu();
+      menu.setUseNativeMenu(false);
+      for (const item of entries) {
+        menu.addItem((mi) => {
+          mi.setTitle(item.title);
+          mi.setIcon(item.icon); // forces the icon slot to exist; renderIcon then fixes iconize ids
+          const iconEl = (mi as unknown as { iconEl?: HTMLElement }).iconEl;
+          if (iconEl) renderIcon(iconEl, item.icon, undefined, this.app);
+          mi.onClick(() => item.buttonEl?.click()); // a display-hidden element still dispatches clicks
+        });
+      }
+      const rect = btn.getBoundingClientRect();
+      menu.showAtPosition({ x: rect.right, y: rect.top });
+    });
   }
 
   // One switch over both hide layers (spec 定稿 2026-07-23): hiding sets Obsidian's native flag
@@ -759,7 +810,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
         dropped += 1;
       } else rowById.set(item.id, row);
     });
-    const effective = internals.items.map((i) => ({ id: i.id, hidden: i.hidden || cmdrHidden.has(i.title) }));
+    const effective = internals.items.map((i) => ({ id: i.id, hidden: i.hidden || cmdrHidden.has(i.title), tucked: false }));
     for (const menuRow of computeMenuRows(this.settings.groups, effective)) {
       if (menuRow.kind === "separator") {
         container.createDiv({ cls: "menu-separator" });

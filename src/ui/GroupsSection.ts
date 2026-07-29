@@ -6,10 +6,12 @@ import {
   deleteGroup,
   moveGroup,
   moveItemToGroup,
+  pruneTucked,
   renameGroup,
 } from "../core/ribbonGroups";
 import { renderIcon } from "./iconRender";
 import { withScrollPreserved } from "./scrollKeep";
+import { IconSelectModal } from "./IconSelectModal";
 import type RibbonOrganizerPlugin from "../main";
 import type { RibbonSnapshotItem } from "../main";
 
@@ -123,6 +125,17 @@ export class GroupsSection {
     if (hiddenCount > 0) count.createSpan({ cls: "ribbon-organizer-rg-count-total", text: `/${members.length}` });
     if (group.id === UNGROUPED_ID) {
       hdr.createSpan({ cls: "ribbon-organizer-rg-badge", text: "New icons land here" });
+      const btns = hdr.createDiv({ cls: "ribbon-organizer-rg-btns" });
+      // The current more-menu icon; dashed frame = editable. Clicks land in rg-btns, which the
+      // header's collapse-toggle listener already ignores.
+      const iconBtn = btns.createEl("button", { cls: "ribbon-organizer-qc-icon ribbon-organizer-rg-moreicon", attr: { "aria-label": "Change the menu icon" } });
+      renderIcon(iconBtn, this.plugin.settings.moreIcon, undefined, this.app);
+      iconBtn.onclick = (): void => {
+        new IconSelectModal(this.app, (icon) => {
+          this.plugin.settings.moreIcon = icon;
+          this.persist();
+        }).open();
+      };
     } else {
       // Click the name to rename in place (the Quick menus tab's menu names work the same).
       // stopPropagation keeps the click from toggling the collapse.
@@ -192,6 +205,18 @@ export class GroupsSection {
           });
         });
       eye.extraSettingsEl.toggleClass("is-eye-off", live.hidden);
+    }
+    if (live !== undefined && group.id === UNGROUPED_ID) {
+      const isTucked = this.plugin.settings.moreTucked.includes(itemId);
+      const tuck = new ExtraButtonComponent(btns)
+        .setIcon(isTucked ? "chevrons-down-up" : "chevrons-up-down")
+        .setTooltip(isTucked ? "Show on the ribbon" : "Tuck into the menu")
+        .onClick(() => {
+          const current = this.plugin.settings.moreTucked;
+          this.plugin.settings.moreTucked = isTucked ? current.filter((t) => t !== itemId) : [...current, itemId];
+          this.persist();
+        });
+      tuck.extraSettingsEl.toggleClass("is-tucked", isTucked);
     }
     const more = new ExtraButtonComponent(btns).setIcon("ellipsis-vertical").setTooltip("Move to group");
     more.onClick(() => {
@@ -325,6 +350,8 @@ export class GroupsSection {
 
   private persist(): void {
     void (async () => {
+      // A group claim wins over tucking — prune on every mutation so a drag into a group un-tucks.
+      this.plugin.settings.moreTucked = pruneTucked(this.plugin.settings.groups, this.plugin.settings.moreTucked);
       await this.plugin.saveSettings();
       this.plugin.applyGrouping();
       if (this.containerEl !== null) this.render(this.containerEl);

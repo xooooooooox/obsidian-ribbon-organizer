@@ -60,6 +60,12 @@
  * gap supplies the surrounding spacing. */
 .ribbon-organizer-divider { flex: none; height: 0; border-top: 1px solid var(--background-modifier-border); margin: 2px 10%; }
 
+/* Element-anchored hide layers: Commander's title-keyed CSS misses an icon whose plugin
+   temporarily rewrites its aria-label (remotely-save while syncing); a class pinned to the
+   element itself cannot be pierced. Tucked = collapsed into the more menu. */
+.side-dock-ribbon-action.ribbon-organizer-cmdr-hidden { display: none !important; content-visibility: hidden; }
+.side-dock-ribbon-action.ribbon-organizer-tucked { display: none !important; }
+
 /* Declarative settings shell: one render-type definition row whose element is taken over by
  * the tabbed panel; neutralize the setting-item row chrome so it lays out as a block. */
 .setting-item.ribbon-organizer-section { display: block; padding: 0; border-top: none; }
@@ -95,6 +101,8 @@
 .ribbon-organizer-rg-item.is-hidden .ribbon-organizer-rg-icon,
 .ribbon-organizer-rg-item.is-hidden .ribbon-organizer-rg-title { color: var(--text-faint); }
 .ribbon-organizer-rg-btns .is-eye-off { color: var(--text-accent); }
+.ribbon-organizer-rg-btns .is-tucked { color: var(--text-accent); }
+.ribbon-organizer-rg-moreicon { border: 1px dashed var(--background-modifier-border-hover); border-radius: 6px; }
 .ribbon-organizer-rg-grip { display: inline-flex; color: var(--text-faint); cursor: grab; --icon-size: 14px; }
 .ribbon-organizer-rg-icon { display: inline-flex; --icon-size: 16px; }
 .ribbon-organizer-rg-icon .svg-icon { flex: none; }

@@ -34,7 +34,7 @@ export const BRAND_ICON_ID = "ribbon-organizer";
 // and the scaled stroke-width 2 keeps the drawn weight of a 24 px Lucide icon.
 export const BRAND_ICON_SVG =
   '<g transform="scale(4.1667)" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-  '<rect x="2.5" y="3" width="19" height="18" rx="3"/><path d="M9 3v18"/>' +
+  '<rect x="2.5" y="3" width="19" height="18" rx="3"/><path d="M9 3v14.5"/><path d="M2.5 17.5h19"/>' +
   '<circle cx="5.75" cy="7.5" r="1.2" fill="currentColor" stroke="none"/>' +
   '<circle cx="5.75" cy="11" r="1.2" fill="currentColor" stroke="none"/>' +
-  '<path d="M4.4 14h2.7"/><circle cx="5.75" cy="17" r="1.2" fill="currentColor" stroke="none"/></g>';
+  '<path d="M4.4 14h2.7"/><path d="M16.5 19.4h2.4"/></g>';
