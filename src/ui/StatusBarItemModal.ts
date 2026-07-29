@@ -97,7 +97,7 @@ export class StatusBarItemModal extends Modal {
       });
       this.colorDot(rowEl, index, "iconColor");
 
-      const replaceEl = rowEl.createEl("input", { attr: { type: "text", placeholder: "Text (optional)" } });
+      const replaceEl = rowEl.createEl("input", { attr: { type: "text", placeholder: "New text (optional)" } });
       replaceEl.value = rule.replace;
       const commit = (): void => {
         const next = this.rules();

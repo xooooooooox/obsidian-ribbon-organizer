@@ -43,12 +43,12 @@ export class GroupsSection {
     containerEl.empty();
     containerEl.createDiv({
       cls: "ribbon-organizer-tab-desc",
-      text: "Order the left-ribbon icons into groups and toggle their visibility. Hiding an icon here also hides it in Obsidian and Commander; a divider renders between adjacent non-empty groups. On phones the grouping shapes the navbar ribbon menu; on tablets the drawer ribbon.",
+      text: "Drag the left ribbon icons into groups; a divider separates each group. The eye hides an icon everywhere — Commander included. On phones and tablets the same groups shape the ribbon menu.",
     });
 
     const snapshot = this.plugin.ribbonSnapshot();
     if (snapshot === null) {
-      containerEl.createDiv({ cls: "ribbon-organizer-rg-note", text: "Ribbon grouping is incompatible with this Obsidian version." });
+      containerEl.createDiv({ cls: "ribbon-organizer-rg-note", text: "Ribbon grouping doesn't work on this Obsidian version — the ribbon is left untouched. Check for a plugin update." });
       return;
     }
     const liveById = new Map(snapshot.map((i) => [i.id, i]));
@@ -95,7 +95,7 @@ export class GroupsSection {
     });
     applyFilter();
 
-    const addbar = containerEl.createDiv({ cls: "ribbon-organizer-rg-addbar" });
+    const addbar = containerEl.createDiv({ cls: "ribbon-organizer-qc-addbar" });
     new ButtonComponent(addbar).setButtonText("New group").onClick(() => {
       const id = crypto.randomUUID();
       this.expanded.add(id); // a just-created group is immediately renamed/filled — start it expanded
@@ -124,14 +124,14 @@ export class GroupsSection {
     if (group.id === UNGROUPED_ID) {
       hdr.createSpan({ cls: "ribbon-organizer-rg-badge", text: "New icons land here" });
     } else {
-      // Click the name to rename in place — the pencil button is gone (same interaction as the
-      // Quick menus tab). stopPropagation keeps the click from toggling the collapse.
+      // Click the name to rename in place (the Quick menus tab's menu names work the same).
+      // stopPropagation keeps the click from toggling the collapse.
       nameEl.addEventListener("click", (e) => {
         e.stopPropagation();
         this.startRename(nameEl, group);
       });
       const btns = hdr.createDiv({ cls: "ribbon-organizer-rg-btns" });
-      new ExtraButtonComponent(btns).setIcon("x").setTooltip("Delete group (members fall to Ungrouped)").onClick(() => {
+      new ExtraButtonComponent(btns).setIcon("x").setTooltip("Delete group — its icons move to Ungrouped").onClick(() => {
         this.expanded.delete(group.id);
         this.plugin.settings.groups = deleteGroup(this.plugin.settings.groups, group.id);
         this.persist();
@@ -147,7 +147,7 @@ export class GroupsSection {
       this.refreshVisibility();
     });
     hdr.addEventListener("dragstart", (e) => this.onDragStart(e, { type: "group", groupId: group.id }));
-    this.wireDropTarget(hdr, (payload) => {
+    this.wireHeaderDrop(hdr, (payload) => {
       if (payload.type === "group") {
         if (payload.groupId === group.id) return;
         // Insert before this header; account for the source's removal shifting later indexes.
@@ -210,22 +210,54 @@ export class GroupsSection {
     });
 
     row.addEventListener("dragstart", (e) => this.onDragStart(e, { type: "item", itemId, fromGroupId: group.id, fromIndex: memberIndex }));
-    this.wireDropTarget(row, (payload) => {
-      if (payload.type === "group") return; // groups drop on headers only
+    this.wireItemDrop(row, group, memberIndex);
+    return row;
+  }
+
+  // Half-zone insertion on item rows (same semantics and visuals as the Status bar tab): the
+  // pointer's vertical half decides before/after, so a group's last row reaches its end.
+  // Group payloads drop on headers only and get no indicator here; a drag that cannot move
+  // anything (within ungrouped, where live order rules) gets none either.
+  private wireItemDrop(row: HTMLElement, group: RibbonGroup, memberIndex: number): void {
+    const inert = (payload: DragPayload): boolean =>
+      payload.type === "group" || (group.id === UNGROUPED_ID && payload.fromGroupId === UNGROUPED_ID);
+    const zoneOf = (e: DragEvent): "before" | "after" => {
+      const rect = row.getBoundingClientRect();
+      return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+    };
+    const clear = (): void => {
+      row.removeClass("is-drop-before");
+      row.removeClass("is-drop-after");
+    };
+    row.addEventListener("dragover", (e) => {
+      if (this.drag === null || inert(this.drag)) return;
+      e.preventDefault();
+      const zone = zoneOf(e);
+      row.toggleClass("is-drop-before", zone === "before");
+      row.toggleClass("is-drop-after", zone === "after");
+    });
+    row.addEventListener("dragleave", clear);
+    row.addEventListener("dragend", () => this.clearDrag());
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const zone = zoneOf(e);
+      clear();
+      const payload = this.drag;
+      this.drag = null;
+      if (payload === null || payload.type !== "item") return;
       if (group.id === UNGROUPED_ID) {
         if (payload.fromGroupId === UNGROUPED_ID) return; // reorder within ungrouped is a no-op (live order rules)
         this.plugin.settings.groups = moveItemToGroup(this.plugin.settings.groups, payload.itemId, UNGROUPED_ID);
         this.persist();
         return;
       }
-      // Insert before this row; same-group downward moves shift by one after removal.
-      let to = memberIndex;
-      if (payload.fromGroupId === group.id && payload.fromIndex < memberIndex) to -= 1;
+      // Same-group moves account for the removal shifting later indexes.
+      let to = memberIndex + (zone === "after" ? 1 : 0);
+      if (payload.fromGroupId === group.id && payload.fromIndex < to) to -= 1;
       if (payload.fromGroupId === group.id && payload.fromIndex === to) return;
       this.plugin.settings.groups = moveItemToGroup(this.plugin.settings.groups, payload.itemId, group.id, to);
       this.persist();
     });
-    return row;
   }
 
   private startRename(nameEl: HTMLElement, group: RibbonGroup): void {
@@ -256,24 +288,39 @@ export class GroupsSection {
     if (e.dataTransfer) e.dataTransfer.effectAllowed = "move";
   }
 
-  private wireDropTarget(el: HTMLElement, onDrop: (payload: DragPayload) => void): void {
-    el.addEventListener("dragover", (e) => {
+  // Group headers take two payloads with two indicators: a dragged group inserts before the
+  // header (accent top bar), a dragged item appends into the group (whole-frame highlight).
+  private wireHeaderDrop(hdr: HTMLElement, onDrop: (payload: DragPayload) => void): void {
+    const classFor = (payload: DragPayload): string =>
+      payload.type === "group" ? "is-drop-target" : "ribbon-organizer-is-drop-into";
+    const clear = (): void => {
+      hdr.removeClass("is-drop-target");
+      hdr.removeClass("ribbon-organizer-is-drop-into");
+    };
+    hdr.addEventListener("dragover", (e) => {
       if (this.drag === null) return;
       e.preventDefault();
-      el.addClass("is-drop-target");
+      hdr.addClass(classFor(this.drag));
     });
-    el.addEventListener("dragleave", () => el.removeClass("is-drop-target"));
-    el.addEventListener("dragend", () => {
-      this.drag = null;
-      el.removeClass("is-drop-target");
-    });
-    el.addEventListener("drop", (e) => {
+    hdr.addEventListener("dragleave", clear);
+    hdr.addEventListener("dragend", () => this.clearDrag());
+    hdr.addEventListener("drop", (e) => {
       e.preventDefault();
-      el.removeClass("is-drop-target");
+      clear();
       const payload = this.drag;
       this.drag = null;
       if (payload !== null) onDrop(payload);
     });
+  }
+
+  // dragend fires on the drag source only — clear state and any highlight stranded by a
+  // cancelled drag (Escape while hovering a target never fires that target's dragleave).
+  private clearDrag(): void {
+    this.drag = null;
+    if (this.containerEl === null) return;
+    const classes = ["is-drop-before", "is-drop-after", "is-drop-target", "ribbon-organizer-is-drop-into"];
+    for (const el of Array.from(this.containerEl.querySelectorAll(classes.map((c) => `.${c}`).join(", "))))
+      el.classList.remove(...classes);
   }
 
   private persist(): void {

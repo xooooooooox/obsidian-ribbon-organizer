@@ -2,7 +2,7 @@
 
 /* Quick menus settings */
 .ribbon-organizer-qc-row { display: flex; align-items: center; gap: 11px; padding: 9px 11px;
-  background: var(--background-secondary); border: 1px solid var(--background-modifier-border); border-radius: 8px; }
+  background: var(--background-secondary); border: 1px solid var(--background-modifier-border); border-radius: var(--radius-m); }
 .ribbon-organizer-qc-row.is-missing { opacity: 0.55; }
 .ribbon-organizer-qc-icon { flex: none; width: 32px; height: 32px; display: flex; align-items: center;
   justify-content: center; background: var(--background-primary);
@@ -10,37 +10,49 @@
 .ribbon-organizer-qc-icon .svg-icon { flex: none; }
 .ribbon-organizer-qc-meta { flex: 1; min-width: 0; }
 .ribbon-organizer-qc-label { width: 100%; }
-.ribbon-organizer-qc-missing { font-size: var(--font-ui-smaller); color: var(--text-faint); margin-top: 3px; }
+.ribbon-organizer-qc-missing { flex: none; font-size: var(--font-ui-smaller); color: var(--text-faint); font-style: italic; }
 .ribbon-organizer-qc-btns { flex: none; display: flex; gap: 2px; }
 .ribbon-organizer-qc-seprow { display: flex; align-items: center; gap: 10px; padding: 6px 11px;
-  border: 1px dashed var(--background-modifier-border); border-radius: 8px; }
+  border: 1px dashed var(--background-modifier-border); border-radius: var(--radius-m); }
 .ribbon-organizer-qc-sepline { flex: 1; height: 1px; background: var(--background-modifier-border); }
-.ribbon-organizer-qc-septxt { font-size: var(--font-ui-smaller); text-transform: uppercase;
-  letter-spacing: 0.05em; color: var(--text-faint); }
+/* Small-caps label pattern (docs/DESIGN.md): separators, pack tags, strip label, modal section titles. */
+.ribbon-organizer-qc-septxt, .ribbon-organizer-iconpick-pack,
+.ribbon-organizer-sb-strip-label, .ribbon-organizer-sbm-sec { font-size: var(--font-ui-smaller);
+  text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-faint); }
 .ribbon-organizer-qc-addbar { display: flex; gap: 8px; margin-bottom: 18px; }
 .ribbon-organizer-iconpick { display: flex; align-items: center; gap: 10px; --icon-size: 18px; }
 .ribbon-organizer-iconpick-glyph { display: inline-flex; align-items: center; }
 .ribbon-organizer-iconpick-glyph .svg-icon { flex: none; }
-.ribbon-organizer-iconpick-pack { margin-left: auto; font-size: var(--font-ui-smaller); color: var(--text-faint);
-  text-transform: uppercase; letter-spacing: 0.05em; }
+.ribbon-organizer-iconpick-pack { margin-left: auto; }
 
 /* Quick menus — one collapsible section per composite ribbon icon */
 .ribbon-organizer-qm-list { display: flex; flex-direction: column; border: 1px solid var(--background-modifier-border);
-  border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
+  border-radius: var(--radius-m); overflow: hidden; margin-bottom: 8px; }
 .ribbon-organizer-qm-hdr { display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-weight: 600;
   background: var(--background-secondary); border-top: 1px solid var(--background-modifier-border); cursor: pointer; }
 .ribbon-organizer-qm-hdr:first-child { border-top: none; }
 .ribbon-organizer-qm-hdr .ribbon-organizer-qc-icon { width: 28px; height: 28px; --icon-size: 16px; }
 .ribbon-organizer-qm-hdr .ribbon-organizer-rg-btns { margin-left: auto; }
-.ribbon-organizer-qm-name { font-weight: 600; max-width: 220px; }
+.ribbon-organizer-qm-name { font-weight: 600; max-width: 220px; cursor: text;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ribbon-organizer-qm-body { display: flex; flex-direction: column; gap: 7px; padding: 8px 10px 10px 24px;
   border-top: 1px solid var(--background-modifier-border); }
 .ribbon-organizer-qm-body.is-collapsed { display: none; }
 .ribbon-organizer-qm-body .ribbon-organizer-qc-addbar { margin-bottom: 0; }
-.ribbon-organizer-qc-cmdid { flex: none; max-width: 12em; overflow: hidden; text-overflow: ellipsis;
+.ribbon-organizer-qc-plugin { flex: none; max-width: 12em; overflow: hidden; text-overflow: ellipsis;
   white-space: nowrap; font-size: var(--font-ui-smaller); color: var(--text-faint); }
-.ribbon-organizer-qc-row.is-drop-target, .ribbon-organizer-qc-seprow.is-drop-target,
-.ribbon-organizer-qm-hdr.is-drop-target { box-shadow: inset 0 2px 0 var(--interactive-accent); }
+
+/* Drop indicators, shared by all three tabs: insert positions use accent inset bars
+ * (top = before, bottom = after); a container header (group / menu) highlights whole-frame
+ * instead — the drop appends to its end. */
+.ribbon-organizer-qc-row.is-drop-before, .ribbon-organizer-qc-seprow.is-drop-before,
+.ribbon-organizer-rg-item.is-drop-before, .ribbon-organizer-sb-item.is-drop-before {
+  box-shadow: inset 0 2px 0 var(--interactive-accent); }
+.ribbon-organizer-qc-row.is-drop-after, .ribbon-organizer-qc-seprow.is-drop-after,
+.ribbon-organizer-rg-item.is-drop-after, .ribbon-organizer-sb-item.is-drop-after {
+  box-shadow: inset 0 -2px 0 var(--interactive-accent); }
+.ribbon-organizer-is-drop-into { outline: 2px solid var(--interactive-accent); outline-offset: -2px;
+  background-color: color-mix(in srgb, var(--interactive-accent) 12%, transparent); }
 
 /* Ribbon grouping — divider between adjacent non-empty groups (desktop left ribbon and the
  * tablet drawer ribbon).
@@ -67,7 +79,7 @@
 /* Ribbon groups settings */
 .ribbon-organizer-rg-filter { width: 100%; margin-bottom: 8px; }
 .ribbon-organizer-rg-list { display: flex; flex-direction: column; border: 1px solid var(--background-modifier-border);
-  border-radius: 8px; overflow: hidden; margin-bottom: 8px; }
+  border-radius: var(--radius-m); overflow: hidden; margin-bottom: 8px; }
 .ribbon-organizer-rg-hdr { display: flex; align-items: center; gap: 8px; padding: 7px 10px; font-weight: 600;
   background: var(--background-secondary); border-top: 1px solid var(--background-modifier-border); cursor: pointer; }
 .ribbon-organizer-rg-hdr:first-child { border-top: none; }
@@ -88,37 +100,40 @@
 .ribbon-organizer-rg-icon .svg-icon { flex: none; }
 .ribbon-organizer-rg-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ribbon-organizer-rg-plugin { margin-left: auto; font-family: var(--font-monospace); font-size: var(--font-ui-smaller); color: var(--text-faint); background: var(--background-secondary); border: 1px solid var(--background-modifier-border); border-radius: 4px; padding: 0 6px; }
-.ribbon-organizer-rg-missing { font-size: var(--font-ui-smaller); color: var(--text-faint); }
+.ribbon-organizer-rg-missing { margin-left: auto; font-size: var(--font-ui-smaller); color: var(--text-faint); font-style: italic; }
+/* The plugin chip's own auto margin would split the free space with the missing note's;
+   with the note present the note carries the row's spring and the chip follows it. */
+.ribbon-organizer-rg-missing + .ribbon-organizer-rg-plugin { margin-left: 0; }
 .ribbon-organizer-rg-badge { margin-left: 4px; padding: 1px 7px; border-radius: 8px;
   font-size: var(--font-ui-smaller); color: var(--text-muted); background: var(--background-modifier-border); }
 .ribbon-organizer-rg-hdr .ribbon-organizer-rg-btns { margin-left: auto; }
 .ribbon-organizer-rg-btns { flex: none; display: flex; gap: 2px; }
 .ribbon-organizer-rg-rename { font-weight: 600; }
-.ribbon-organizer-rg-addbar { display: flex; gap: 8px; margin-bottom: 18px; }
 .ribbon-organizer-rg-note { color: var(--text-faint); margin-bottom: 18px; }
-.ribbon-organizer-rg-hdr.is-drop-target, .ribbon-organizer-rg-item.is-drop-target {
-  box-shadow: inset 0 2px 0 var(--interactive-accent); }
+/* A dragged group inserts before the header it lands on — insert-before bar, not drop-into. */
+.ribbon-organizer-rg-hdr.is-drop-target { box-shadow: inset 0 2px 0 var(--interactive-accent); }
 
-/* Phone settings: two-line quick-command rows (command id gets its own full-width line),
- * name input fills the header, taller touch targets, plugin badge dropped for width. */
+/* Phone settings: two-line quick-command rows (the owning plugin's name gets its own
+ * full-width line), menu name fills the header, taller touch targets, plugin badge dropped
+ * for width. */
 .is-phone .ribbon-organizer-qc-row { flex-wrap: wrap; }
-.is-phone .ribbon-organizer-qc-cmdid { flex-basis: 100%; order: 10; max-width: none; margin-left: 39px; }
+.is-phone .ribbon-organizer-qc-plugin { flex-basis: 100%; order: 10; max-width: none; margin-left: 39px; }
 .is-phone .ribbon-organizer-qm-name { max-width: none; flex: 1; min-width: 0; }
 .is-phone .ribbon-organizer-rg-hdr, .is-phone .ribbon-organizer-rg-item,
 .is-phone .ribbon-organizer-qm-hdr { min-height: 40px; }
 .is-phone .ribbon-organizer-rg-plugin { display: none; }
 /* The plugin badge is the row's auto-margin carrier on desktop; with it display-none on phones
- * the buttons take over right-alignment. */
+ * the buttons take over right-alignment and the missing note follows the title. */
 .is-phone .ribbon-organizer-rg-item .ribbon-organizer-rg-btns { margin-left: auto; }
+.is-phone .ribbon-organizer-rg-missing { margin-left: 0; }
 
 /* ---------- Status bar tab ---------- */
 .ribbon-organizer-sb-list { display: flex; flex-direction: column; border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-m); overflow: hidden; }
 .ribbon-organizer-sb-item { display: flex; align-items: center; gap: 8px; padding: 5px 10px;
-  border-bottom: 1px solid var(--background-modifier-border); }
-.ribbon-organizer-sb-item:last-child { border-bottom: none; }
+  border-top: 1px solid var(--background-modifier-border); }
+.ribbon-organizer-sb-item:first-child { border-top: none; }
 .ribbon-organizer-sb-item.is-missing { opacity: 0.55; }
-.ribbon-organizer-sb-item.is-drop-target { box-shadow: inset 0 2px 0 var(--interactive-accent); }
 .ribbon-organizer-sb-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ribbon-organizer-sb-ordinal { color: var(--text-faint); font-size: var(--font-ui-smaller); }
 .ribbon-organizer-sb-preview { margin-left: auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
@@ -145,8 +160,7 @@
 .ribbon-organizer-sb-lock { display: inline-flex; color: var(--text-faint); --icon-size: 14px; }
 .ribbon-organizer-sb-pintag { margin-left: auto; color: var(--text-faint); font-size: var(--font-ui-smaller); font-style: italic; }
 .ribbon-organizer-sb-item .ribbon-organizer-rg-btns { flex: none; }
-.ribbon-organizer-sb-strip-label { font-size: var(--font-ui-smaller); color: var(--text-faint);
-  text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+.ribbon-organizer-sb-strip-label { margin-bottom: 6px; }
 /* The strip reuses the status-bar class so theme/plugin item CSS styles the clones, then
  * re-asserts plain in-panel layout (core hides/floats the real bar on some platforms).
  * relative, not static: the strip must be the containing block for plugin abspos children
@@ -162,8 +176,6 @@
   background: var(--background-secondary); padding: 4px 10px; margin-bottom: 8px; transform: none; inset: auto !important; }
 .ribbon-organizer-sb-spot { outline: 1.5px solid var(--interactive-accent); outline-offset: 1px; border-radius: 3px; }
 .ribbon-organizer-sb-notshown { margin-left: auto; color: var(--text-faint); font-size: var(--font-ui-smaller); font-style: italic; }
-.ribbon-organizer-sb-item.is-drop-before { box-shadow: inset 0 2px 0 var(--interactive-accent); }
-.ribbon-organizer-sb-item.is-drop-after { box-shadow: inset 0 -2px 0 var(--interactive-accent); }
 .ribbon-organizer-rg-btns .is-rules-on, .ribbon-organizer-rg-btns .is-mode-on { color: var(--text-accent); }
 /* Hidden items: a class rule, not an inline style — core and plugins re-set their item's
    inline display on every active-leaf change (backlink, word count, git…), which would
@@ -180,12 +192,12 @@
 .ribbon-organizer-sb-ricon .svg-icon { width: var(--icon-s, 16px); height: var(--icon-s, 16px); }
 .ribbon-organizer-sb-ricon-solo { margin-right: 0; }
 /* Customize modal */
-.ribbon-organizer-sbm-sec { font-size: var(--font-ui-smaller); color: var(--text-faint); text-transform: uppercase; letter-spacing: 0.05em; margin: 14px 0 6px; }
+.ribbon-organizer-sbm-sec { margin: 14px 0 6px; }
 .ribbon-organizer-sbm-modes { display: flex; gap: 6px; }
 .ribbon-organizer-sbm-pill { display: inline-flex; align-items: center; gap: 6px; }
 .ribbon-organizer-sbm-pill.is-selected { border-color: var(--interactive-accent); color: var(--text-normal); }
 .ribbon-organizer-sbm-pillicon { display: inline-flex; }
-.ribbon-organizer-sbm-pillicon svg { width: 13px; height: 13px; }
+.ribbon-organizer-sbm-pillicon svg { width: var(--icon-s, 16px); height: var(--icon-s, 16px); }
 .ribbon-organizer-sbm-seen { display: flex; flex-direction: column; gap: 4px; }
 .ribbon-organizer-sbm-seenrow { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .ribbon-organizer-sbm-seenrow .ribbon-organizer-sbm-chip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 55%; flex: none; display: block; text-align: left; }

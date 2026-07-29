@@ -4,6 +4,13 @@ export type QuickMenuEntry =
   | { kind: "separator" }
   | { kind: "command"; commandId: string; label: string; icon: string; disabled: boolean };
 
+// A command id's owner prefix (the part before the first ":"): the owning plugin's id for
+// plugin commands, a core namespace ("editor", "workspace", "app", …) otherwise. An id
+// without a colon is its own owner.
+export function commandOwnerId(commandId: string): string {
+  return commandId.split(":")[0] ?? commandId;
+}
+
 // Maps configured quick entries to ribbon-menu entries: commands carry a `disabled` flag when not
 // registered on this device; separators are normalized (no leading/trailing/consecutive dividers,
 // and the whole list collapses to [] when it holds no command). Obsidian-free.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { quickMenuEntries } from "../src/core/quickCommands";
+import { commandOwnerId, quickMenuEntries } from "../src/core/quickCommands";
 
 const reg = (ids: string[]) => (id: string): boolean => ids.includes(id);
 
@@ -41,5 +41,20 @@ describe("quickMenuEntries", () => {
   it("returns [] when there is no command", () => {
     expect(quickMenuEntries([{ kind: "separator" }], reg([]))).toEqual([]);
     expect(quickMenuEntries([], reg([]))).toEqual([]);
+  });
+});
+
+describe("commandOwnerId", () => {
+  it("returns the prefix before the first colon", () => {
+    expect(commandOwnerId("remotely-save:start-sync")).toBe("remotely-save");
+    expect(commandOwnerId("editor:toggle-bold")).toBe("editor");
+  });
+
+  it("keeps only the first segment when the rest contains colons", () => {
+    expect(commandOwnerId("a:b:c")).toBe("a");
+  });
+
+  it("returns the whole id when there is no colon", () => {
+    expect(commandOwnerId("standalone")).toBe("standalone");
   });
 });

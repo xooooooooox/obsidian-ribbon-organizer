@@ -1,4 +1,5 @@
 import { App, ButtonComponent, ExtraButtonComponent, setIcon } from "obsidian";
+import { commandOwnerId } from "../core/quickCommands";
 import { uniqueMenuName } from "../core/quickMenus";
 import { QuickEntry, QuickMenu, isSeparator } from "../core/types";
 import { CommandSelectModal } from "./CommandSelectModal";
@@ -61,24 +62,12 @@ export class QuickMenusSection {
         this.persistAndSync();
       }).open();
     };
-    const nameInput = hdr.createEl("input", { cls: "ribbon-organizer-qm-name", attr: { type: "text", "aria-label": "Menu name" } });
-    nameInput.value = menu.name;
-    nameInput.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") nameInput.blur();
-      if (e.key === "Escape") {
-        nameInput.value = menu.name;
-        nameInput.blur();
-      }
-    });
-    nameInput.addEventListener("blur", () => {
-      const name = nameInput.value.trim();
-      const taken = this.plugin.settings.menus.some((m) => m.id !== menu.id && m.name === name);
-      if (name === "" || taken || name === menu.name) {
-        nameInput.value = menu.name; // empty and duplicate names revert (names must stay unique: they are the ribbon ids)
-        return;
-      }
-      menu.name = name;
-      this.persistAndSync();
+    const nameEl = hdr.createSpan({ cls: "ribbon-organizer-qm-name", text: menu.name });
+    // Click the name to rename in place (same interaction as the Ribbon tab's group names).
+    // stopPropagation keeps the click from toggling the collapse.
+    nameEl.addEventListener("click", (e) => {
+      e.stopPropagation();
+      this.startRename(nameEl, menu);
     });
     const commandCount = menu.entries.filter((e) => !isSeparator(e)).length;
     hdr.createSpan({ cls: "ribbon-organizer-rg-count", text: String(commandCount) });
@@ -91,7 +80,8 @@ export class QuickMenusSection {
     const body = listEl.createDiv({ cls: "ribbon-organizer-qm-body" });
     body.toggleClass("is-collapsed", !this.expanded.has(menu.id));
     this.renderEntries(body, menu);
-    // Click toggles collapse; ignore the icon button, the name input, and the buttons area.
+    // Click toggles collapse; ignore the icon button, the transient rename input, and the
+    // buttons area (the name span stops its own clicks — they start a rename instead).
     hdr.addEventListener("click", (e) => {
       const t = e.target;
       if (
@@ -104,14 +94,41 @@ export class QuickMenusSection {
       setIcon(chevron, this.expanded.has(menu.id) ? "chevron-down" : "chevron-right");
       body.toggleClass("is-collapsed", !this.expanded.has(menu.id));
     });
-    // Entry dropped on a menu header: append to that menu's end — the own header included,
-    // which is the only way to drag an entry to the last slot of its own menu. Works while
-    // collapsed, no expand (same semantics as GroupsSection's group headers).
-    this.wireDropTarget(hdr, (from) => {
+    // Entry dropped on a menu header: append to that menu's end — the own header included.
+    // Works while collapsed, no expand (same semantics as GroupsSection's group headers).
+    this.wireDropInto(hdr, (from) => {
       const moved = this.takeEntry(from);
       if (moved === null) return;
       menu.entries.push(moved);
       this.persist();
+    });
+  }
+
+  // In-place rename: the name span swaps for an input; Enter commits, Escape restores, blur
+  // commits. Empty and duplicate names revert (names must stay unique: they are the ribbon
+  // ids) — the re-render restores the name span either way.
+  private startRename(nameEl: HTMLElement, menu: QuickMenu): void {
+    const input = createEl("input", { cls: "ribbon-organizer-rg-rename", attr: { type: "text", "aria-label": "Menu name" } });
+    input.value = menu.name;
+    nameEl.replaceWith(input);
+    input.focus();
+    input.select();
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") input.blur();
+      if (e.key === "Escape") {
+        input.value = menu.name;
+        input.blur();
+      }
+    });
+    input.addEventListener("blur", () => {
+      const name = input.value.trim();
+      const taken = this.plugin.settings.menus.some((m) => m.id !== menu.id && m.name === name);
+      if (name === "" || taken || name === menu.name) {
+        if (this.containerEl !== null) this.render(this.containerEl);
+        return;
+      }
+      menu.name = name;
+      this.persistAndSync();
     });
   }
 
@@ -122,10 +139,11 @@ export class QuickMenusSection {
     return moved ?? null;
   }
 
-  // Insert before the target row; same-menu downward moves shift by one after removal.
-  private dropOnRow(from: { menuId: string; index: number }, menu: QuickMenu, index: number): void {
-    let to = index;
-    if (from.menuId === menu.id && from.index < index) to -= 1;
+  // Insert relative to the target row: upper half = before, lower half = after; same-menu
+  // moves account for the removal shifting later indexes.
+  private dropOnRow(from: { menuId: string; index: number }, menu: QuickMenu, index: number, zone: "before" | "after"): void {
+    let to = index + (zone === "after" ? 1 : 0);
+    if (from.menuId === menu.id && from.index < to) to -= 1;
     if (from.menuId === menu.id && from.index === to) return;
     const moved = this.takeEntry(from);
     if (moved === null) return;
@@ -133,24 +151,55 @@ export class QuickMenusSection {
     this.persist();
   }
 
-  private wireDropTarget(el: HTMLElement, onDrop: (from: { menuId: string; index: number }) => void): void {
+  // Menu headers are append-to-end targets: whole-frame highlight, no insert position.
+  private wireDropInto(el: HTMLElement, onDrop: (from: { menuId: string; index: number }) => void): void {
     el.addEventListener("dragover", (e) => {
       if (this.drag === null) return;
       e.preventDefault();
-      el.addClass("is-drop-target");
+      el.addClass("ribbon-organizer-is-drop-into");
     });
-    el.addEventListener("dragleave", () => el.removeClass("is-drop-target"));
+    el.addEventListener("dragleave", () => el.removeClass("ribbon-organizer-is-drop-into"));
     el.addEventListener("drop", (e) => {
       e.preventDefault();
-      el.removeClass("is-drop-target");
+      el.removeClass("ribbon-organizer-is-drop-into");
       const from = this.drag;
       this.drag = null;
       if (from !== null) onDrop(from);
     });
   }
 
+  // Half-zone insertion on entry rows (same semantics and visuals as the Status bar tab):
+  // the pointer's vertical half decides before/after, so the last row's bottom half reaches
+  // the end of the list.
+  private wireRowDrop(row: HTMLElement, menu: QuickMenu, index: number): void {
+    const zoneOf = (e: DragEvent): "before" | "after" => {
+      const rect = row.getBoundingClientRect();
+      return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+    };
+    const clear = (): void => {
+      row.removeClass("is-drop-before");
+      row.removeClass("is-drop-after");
+    };
+    row.addEventListener("dragover", (e) => {
+      if (this.drag === null) return;
+      e.preventDefault();
+      const zone = zoneOf(e);
+      row.toggleClass("is-drop-before", zone === "before");
+      row.toggleClass("is-drop-after", zone === "after");
+    });
+    row.addEventListener("dragleave", clear);
+    row.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const zone = zoneOf(e);
+      clear();
+      const from = this.drag;
+      this.drag = null;
+      if (from !== null) this.dropOnRow(from, menu, index, zone);
+    });
+  }
+
   private renderEntries(body: HTMLElement, menu: QuickMenu): void {
-    const registry = (this.app as unknown as { commands: { commands: Record<string, { icon?: string }> } }).commands.commands;
+    const registry = (this.app as unknown as { commands: { commands: Record<string, { icon?: string; name?: unknown }> } }).commands.commands;
     const list = menu.entries;
     // The grip is the drag handle: rows hold a label input, so a fully draggable row would
     // fight text selection; setDragImage keeps the whole row as the drag ghost.
@@ -170,14 +219,16 @@ export class QuickMenusSection {
       grip.addEventListener("dragend", () => {
         this.drag = null;
         if (this.containerEl !== null) {
-          for (const el of Array.from(this.containerEl.querySelectorAll(".is-drop-target"))) el.classList.remove("is-drop-target");
+          const classes = ["is-drop-before", "is-drop-after", "ribbon-organizer-is-drop-into"];
+          for (const el of Array.from(this.containerEl.querySelectorAll(classes.map((c) => `.${c}`).join(", "))))
+            el.classList.remove(...classes);
         }
       });
-      this.wireDropTarget(row, (from) => this.dropOnRow(from, menu, idx));
+      this.wireRowDrop(row, menu, idx);
     };
     const removeButton = (row: HTMLElement, idx: number, tooltip: string): void => {
       const rowBtns = row.createDiv({ cls: "ribbon-organizer-qc-btns" });
-      new ExtraButtonComponent(rowBtns).setIcon("trash").setTooltip(tooltip).onClick(() => {
+      new ExtraButtonComponent(rowBtns).setIcon("trash-2").setTooltip(tooltip).onClick(() => {
         list.splice(idx, 1);
         this.persist();
       });
@@ -199,7 +250,9 @@ export class QuickMenusSection {
       wireDrag(row, idx);
       const iconBtn = row.createEl("button", { cls: "ribbon-organizer-qc-icon", attr: { "aria-label": "Change icon" } });
       const paint = (id: string): void => renderIcon(iconBtn, id, registry[entry.commandId]?.icon, this.app);
-      paint(entry.icon);
+      // Absent commands mark the absence in the icon slot; the stored icon returns with the command.
+      if (missing) setIcon(iconBtn, "help");
+      else paint(entry.icon);
       iconBtn.onclick = (): void => {
         new IconSelectModal(this.app, (icon) => {
           entry.icon = icon;
@@ -215,9 +268,15 @@ export class QuickMenusSection {
         entry.label = input.value.trim() || entry.commandId;
         void this.plugin.saveSettings();
       });
-      if (missing) meta.createDiv({ cls: "ribbon-organizer-qc-missing", text: "Not on this device" });
-      // The binding stays visible however the label is edited; hover shows a truncated id in full.
-      row.createSpan({ cls: "ribbon-organizer-qc-cmdid", text: entry.commandId, attr: { title: entry.commandId } });
+      if (missing) row.createSpan({ cls: "ribbon-organizer-qc-missing", text: "Not on this device" });
+      // The owning plugin stays visible however the label is edited; the hover tooltip
+      // carries the command's registered name and the exact id.
+      const cmdName = registry[entry.commandId]?.name;
+      row.createSpan({
+        cls: "ribbon-organizer-qc-plugin",
+        text: this.pluginName(commandOwnerId(entry.commandId)),
+        attr: { "aria-label": typeof cmdName === "string" ? `${cmdName} · ${entry.commandId}` : entry.commandId },
+      });
       removeButton(row, idx, "Remove command");
     });
 
@@ -232,6 +291,15 @@ export class QuickMenusSection {
       list.push({ kind: "separator" });
       this.persist();
     });
+  }
+
+  // The display name of the plugin owning a command id prefix: manifest name when the prefix
+  // is an installed plugin, "Obsidian" for core namespaces (editor:, workspace:, app:, …) —
+  // same manifests read as StatusBarSection's row names.
+  private pluginName(ownerId: string): string {
+    const manifests = (this.app as unknown as { plugins?: { manifests?: Record<string, { name?: unknown }> } }).plugins?.manifests;
+    const name = manifests?.[ownerId]?.name;
+    return typeof name === "string" ? name : "Obsidian";
   }
 
   // Entry-level changes: save + re-render this section (the ribbon icons are unaffected).

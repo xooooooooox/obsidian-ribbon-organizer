@@ -1,6 +1,8 @@
-import { App, Command, FuzzySuggestModal } from "obsidian";
+import { App, Command, FuzzyMatch, FuzzySuggestModal } from "obsidian";
+import { renderIcon } from "./iconRender";
 
-// Fuzzy-search over every registered command; used by the Quick menus settings section to
+// Fuzzy-search over every registered command, each suggestion rendered with its command's
+// icon preview (mirrors IconSelectModal); used by the Quick menus settings section to
 // add an entry.
 export class CommandSelectModal extends FuzzySuggestModal<Command> {
   constructor(app: App, private onChoose: (cmd: Command) => void) {
@@ -13,6 +15,11 @@ export class CommandSelectModal extends FuzzySuggestModal<Command> {
   }
   getItemText(cmd: Command): string {
     return cmd.name;
+  }
+  renderSuggestion(match: FuzzyMatch<Command>, el: HTMLElement): void {
+    el.addClass("ribbon-organizer-iconpick");
+    renderIcon(el.createSpan({ cls: "ribbon-organizer-iconpick-glyph" }), match.item.icon ?? "command", undefined, this.app);
+    el.createSpan({ text: match.item.name });
   }
   onChooseItem(cmd: Command): void {
     this.onChoose(cmd);

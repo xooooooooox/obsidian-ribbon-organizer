@@ -57,7 +57,7 @@ export class StatusBarSection {
 
     const snapshot = this.plugin.statusBarSnapshot();
     if (snapshot === null) {
-      containerEl.createDiv({ cls: "ribbon-organizer-rg-note", text: "Status bar ordering is incompatible with this Obsidian version." });
+      containerEl.createDiv({ cls: "ribbon-organizer-rg-note", text: "Status bar tools don't work on this Obsidian version — the bar is left untouched. Check for a plugin update." });
       return;
     }
     const liveEls = this.plugin.statusBarLiveElements();
@@ -124,7 +124,9 @@ export class StatusBarSection {
     if (live === undefined) row.addClass("is-missing");
     if (live?.hidden === true) row.addClass("is-hidden");
     const grip = row.createSpan({ cls: pinned ? "ribbon-organizer-sb-lock" : "ribbon-organizer-rg-grip" });
-    setIcon(grip, live === undefined ? "help" : pinned ? "lock" : "grip-vertical");
+    setIcon(grip, pinned ? "lock" : "grip-vertical");
+    // Absent rows keep their grip (they still sort); `help` marks the absence in the icon slot.
+    if (live === undefined) setIcon(row.createSpan({ cls: "ribbon-organizer-rg-icon" }), "help");
     const title = row.createSpan({ cls: "ribbon-organizer-sb-title", text: this.displayName(key, liveEl) });
     if ((keyCounts.get(key) ?? 0) > 1) title.createSpan({ cls: "ribbon-organizer-sb-ordinal", text: ` · ${String(index + 1)}` });
     if (live === undefined) row.createSpan({ cls: "ribbon-organizer-sb-missing", text: "Not on this device" });
@@ -137,7 +139,7 @@ export class StatusBarSection {
       if (live.hasText) {
         const wand = new ExtraButtonComponent(btns)
           .setIcon("wand-2")
-          .setTooltip("Rewrite rules")
+          .setTooltip("Customize how it shows")
           .onClick(() => {
             new StatusBarItemModal(this.app, this.plugin, id, this.displayName(key, liveEl), () => {
               if (this.containerEl !== null) this.render(this.containerEl);
@@ -147,7 +149,7 @@ export class StatusBarSection {
       }
       const modeBtn = new ExtraButtonComponent(btns)
         .setIcon(MODE_ICON[live.mode])
-        .setTooltip(MODE_NAME[live.mode])
+        .setTooltip(`Display: ${MODE_NAME[live.mode]} — click for ${MODE_NAME[MODE_NEXT[live.mode]]}`)
         .onClick(() => {
           void this.plugin.setStatusBarItemMode(id, MODE_NEXT[live.mode]).then(() => {
             if (this.containerEl !== null) this.render(this.containerEl);

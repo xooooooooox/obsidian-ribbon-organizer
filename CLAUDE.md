@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-Obsidian plugin: the ribbon housekeeper — orders the left-ribbon icons into named groups with divider lines, and launches commands from a configurable ribbon menu. Grouping spec: `docs/superpowers/specs/2026-07-23-ribbon-grouping-design.md` (read it before changing `applyGrouping` or the settings panel); phone-menu spec: `docs/superpowers/specs/2026-07-24-mobile-menu-and-settings-polish-design.md` (read it before changing `observeMenus`/`groupRibbonMenu`). The Quick menus feature (formerly Quick commands) was extracted from [obsidian-config-sync](https://github.com/xooooooooox/obsidian-config-sync); the extraction spec lives in that repo.
+Obsidian plugin: the ribbon & status bar housekeeper — orders the left-ribbon icons into named groups with divider lines, launches commands from configurable ribbon menus, and reorders/hides/restyles status bar items (modes, {name} rewrite rules with icons and colors, mobile pill). Grouping spec: `docs/superpowers/specs/2026-07-23-ribbon-grouping-design.md` (read it before changing `applyGrouping` or the settings panel); phone-menu spec: `docs/superpowers/specs/2026-07-24-mobile-menu-and-settings-polish-design.md` (read it before changing `observeMenus`/`groupRibbonMenu`). Status-bar specs: `docs/superpowers/specs/2026-07-28-statusbar-*.md` and `2026-07-29-*.md` (read the matching one before changing `applyStatusBarOrder`, the rewrite engine, or `StatusBarSection`). The Quick menus feature (formerly Quick commands) was extracted from [obsidian-config-sync](https://github.com/xooooooooox/obsidian-config-sync); the extraction spec lives in that repo.
 
 ## Commands
 
@@ -16,14 +16,15 @@ Obsidian plugin: the ribbon housekeeper — orders the left-ribbon icons into na
 Full code map, invariants, and extension points: [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
 
 - `src/core/` — pure functions with no `obsidian` import; the only tested layer.
-- `src/ui/` — the two-tab settings panel and fuzzy pickers; thin, no logic worth unit-testing.
-- `src/main.ts` — plugin shell; the ONLY file that touches private API (`app.workspace.leftRibbon`, `app.commands`). `ribbonInternals()` runtime-validates the ribbon shape — on mismatch it returns null and grouping disables itself for the session (console.error + one Notice) instead of guessing.
+- `src/ui/` — the three-tab settings panel (Ribbon / Quick menus / Status bar) and fuzzy pickers; thin, no logic worth unit-testing.
+- `src/main.ts` — plugin shell; owns the private API (`app.workspace.leftRibbon`, `app.commands`, `app.statusBar`, `app.mobileNavbar`, Commander via `app.plugins`). `ribbonInternals()` and `statusBarContainer()` runtime-validate the shapes — on mismatch the feature disables itself for the session (console.error + one Notice) instead of guessing.
 
 ## Key constraints
 
 - Ribbon grouping is **visual-only**: flex `order` on the existing buttons plus injected divider divs. Never reorder Obsidian's items array, DOM order, or persistence; unloading must restore the stock ribbon.
 - The settings tab is **dual-path**: `getSettingDefinitions()` for Obsidian 1.13+ (feeds settings search) plus `display()` as the officially sanctioned < 1.13 fallback. `minAppVersion` stays 1.8.7 until every target device runs ≥ 1.13 — then delete the fallback and its `no-deprecated` scope-off in `eslint.config.mts`.
 - The eslint preset forbids ALL inline `eslint-disable` comments: fix the code, or add a scoped block with a rationale comment in `eslint.config.mts`. Gotcha: the sentence-case rule's `brands` option REPLACES the default brand list — 'Obsidian' must stay listed explicitly.
+- Status bar: an untouched config leaves a byte-for-byte native bar; pinned (self-positioned) items never receive an `order`; own-layer hide is the `ribbon-organizer-sb-hidden` class, never inline `display` (owners rewrite their inline display and would erase it); learned samples live in device localStorage, never `data.json`.
 
 ## Toolchain provenance
 
@@ -41,6 +42,6 @@ Unlike config-sync, this repo has no `template` git remote: the toolchain files 
 
 ## Rules
 
-- Errors must carry context (group id, item id, command id). No silent fallback — the `ribbonInternals()` null → Notice + session latch is the one sanctioned incompatibility path.
+- Errors must carry context (group id, item id, command id). No silent fallback — the `ribbonInternals()`/statusBar null → Notice + session latch is the only sanctioned incompatibility path.
 - Grouping runs on every platform through two mechanisms — desktop/tablet via flex `order` (`applyGrouping`), phones via the observed navbar ribbon menu (`observeMenus`/`groupRibbonMenu`); quick menus must keep working on mobile (`isDesktopOnly: false`).
 - Documentation currency: when a change alters user-facing behavior (features, UI, settings, workflows), update the affected docs in the SAME branch — `README.md` and `README.zh.md` (keep the two in sync) and `docs/ARCHITECTURE.md` (code map / invariants, when structure changes). Pure internal refactors that change nothing a user sees need no doc edit. Gate: docs must be current before merging to `main` and before cutting a release.
