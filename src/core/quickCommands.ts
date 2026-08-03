@@ -23,8 +23,14 @@ export function quickMenuEntries(
       ? { kind: "separator" }
       : { kind: "command", commandId: e.commandId, label: e.label, icon: e.icon, disabled: !isRegistered(e.commandId) }
   );
+  return normalizeSeparators(mapped);
+}
+
+// Shared separator discipline: no leading/trailing/consecutive dividers, and a list
+// holding no command collapses to [].
+function normalizeSeparators(list: QuickMenuEntry[]): QuickMenuEntry[] {
   const out: QuickMenuEntry[] = [];
-  for (const e of mapped) {
+  for (const e of list) {
     if (e.kind === "separator") {
       const last = out[out.length - 1];
       if (last === undefined) continue; // no leading separator
@@ -38,4 +44,10 @@ export function quickMenuEntries(
     out.pop(); // no trailing separator
   }
   return out.some((e) => e.kind === "command") ? out : [];
+}
+
+// What the ribbon popup actually shows: commands missing on this device are dropped
+// (settings keeps their greyed rows), and separators orphaned by the removal re-normalize.
+export function presentQuickMenuEntries(entries: QuickMenuEntry[]): QuickMenuEntry[] {
+  return normalizeSeparators(entries.filter((e) => e.kind === "separator" || !e.disabled));
 }

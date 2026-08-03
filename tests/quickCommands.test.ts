@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { commandOwnerId, quickMenuEntries } from "../src/core/quickCommands";
+import { commandOwnerId, presentQuickMenuEntries, quickMenuEntries } from "../src/core/quickCommands";
+import type { QuickMenuEntry } from "../src/core/quickCommands";
 
 const reg = (ids: string[]) => (id: string): boolean => ids.includes(id);
 
@@ -49,6 +50,34 @@ describe("quickMenuEntries", () => {
       reg([])
     );
     expect(out.map((e) => e.kind === "command" && e.disabled)).toEqual([true, true]);
+  });
+});
+
+const cmd = (id: string, disabled: boolean): QuickMenuEntry => ({ kind: "command", commandId: id, label: id, icon: "i", disabled });
+const sep: QuickMenuEntry = { kind: "separator" };
+
+describe("presentQuickMenuEntries", () => {
+  it("drops disabled commands and keeps available ones", () => {
+    expect(presentQuickMenuEntries([cmd("a:x", true), cmd("b:y", false)])).toEqual([cmd("b:y", false)]);
+  });
+
+  it("drops a separator orphaned at the head", () => {
+    expect(presentQuickMenuEntries([cmd("a:x", true), sep, cmd("b:y", false)])).toEqual([cmd("b:y", false)]);
+  });
+
+  it("collapses separators left adjacent by a removal", () => {
+    expect(
+      presentQuickMenuEntries([cmd("a:x", false), sep, cmd("b:y", true), sep, cmd("c:z", false)])
+    ).toEqual([cmd("a:x", false), sep, cmd("c:z", false)]);
+  });
+
+  it("returns [] when every command is disabled", () => {
+    expect(presentQuickMenuEntries([cmd("a:x", true), sep, cmd("b:y", true)])).toEqual([]);
+  });
+
+  it("returns an all-available list unchanged", () => {
+    const list = [cmd("a:x", false), sep, cmd("b:y", false)];
+    expect(presentQuickMenuEntries(list)).toEqual(list);
   });
 });
 

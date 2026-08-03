@@ -1,7 +1,7 @@
 import { addIcon, App, Menu, Notice, Platform, Plugin } from "obsidian";
 import { CmdrHideLists, cmdrHideStyleText, withTitle } from "./core/commanderHide";
 import { BRAND_ICON_ID, BRAND_ICON_SVG } from "./core/icons";
-import { quickMenuEntries } from "./core/quickCommands";
+import { presentQuickMenuEntries, quickMenuEntries } from "./core/quickCommands";
 import { defaultMenus, normalizeMenus } from "./core/quickMenus";
 import { RibbonGroup, UNGROUPED_ID, computeMenuRows, computeRibbonLayout, defaultGroups, normalizeGroups, normalizeMoreIcon, normalizeMoreTucked, pruneTucked } from "./core/ribbonGroups";
 import { cmdrHiddenSiblings, computeStatusBarOrder, deriveStatusBarIds, normalizeStatusBarOrder, splitStatusBarId } from "./core/statusBarItems";
@@ -911,7 +911,8 @@ export default class RibbonOrganizerPlugin extends Plugin {
     const commands = (this.app as unknown as {
       commands: { commands: Record<string, { icon?: string }>; executeCommandById: (id: string) => void };
     }).commands;
-    const entries = quickMenuEntries(quickMenu.entries, (id) => id in commands.commands);
+    // The popup shows only what's runnable here; settings keeps the greyed full list.
+    const entries = presentQuickMenuEntries(quickMenuEntries(quickMenu.entries, (id) => id in commands.commands));
     if (entries.length === 0) {
       menu.addItem((i) => i.setTitle("No commands yet — add them under Quick menus in Ribbon and Status Bar Organizer settings").setDisabled(true));
     }
@@ -925,8 +926,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
         i.setIcon(e.icon); // forces the icon slot to exist; renderIcon then fixes iconize ids
         const iconEl = (i as unknown as { iconEl?: HTMLElement }).iconEl;
         if (iconEl) renderIcon(iconEl, e.icon, commands.commands[e.commandId]?.icon, this.app);
-        if (e.disabled) i.setDisabled(true);
-        else i.onClick(() => commands.executeCommandById(e.commandId));
+        i.onClick(() => commands.executeCommandById(e.commandId)); // presented rows are always runnable
       });
     }
     menu.showAtMouseEvent(evt);
