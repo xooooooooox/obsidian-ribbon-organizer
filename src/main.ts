@@ -883,7 +883,13 @@ export default class RibbonOrganizerPlugin extends Plugin {
       }
     }
     this.menuIcons = [];
+    const commands = (this.app as unknown as { commands: { commands: Record<string, unknown> } }).commands;
     for (const menu of this.settings.menus) {
+      // A menu whose commands are all missing on this device gets no ribbon icon (the
+      // settings tab still lists it, greyed); it re-registers on the next rebuild once a
+      // command is back. Same availability source as openMenu: the live command registry.
+      const entries = quickMenuEntries(menu.entries, (id) => id in commands.commands);
+      if (!entries.some((e) => e.kind === "command" && !e.disabled)) continue;
       const el = this.addRibbonIcon(menu.icon, menu.name, (evt) => this.openMenu(evt, menu.id));
       // addRibbonIcon resolves only registered icon ids; iconize pack ids render blank without
       // the fallback chain. Obsidian re-renders reuse this element, so once is enough.

@@ -42,6 +42,14 @@ describe("quickMenuEntries", () => {
     expect(quickMenuEntries([{ kind: "separator" }], reg([]))).toEqual([]);
     expect(quickMenuEntries([], reg([]))).toEqual([]);
   });
+
+  it("keeps all-missing commands as disabled entries (not an empty list)", () => {
+    const out = quickMenuEntries(
+      [{ commandId: "a:x", label: "X", icon: "i" }, { commandId: "b:y", label: "Y", icon: "i" }],
+      reg([])
+    );
+    expect(out.map((e) => e.kind === "command" && e.disabled)).toEqual([true, true]);
+  });
 });
 
 describe("commandOwnerId", () => {

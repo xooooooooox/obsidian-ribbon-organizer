@@ -14,7 +14,7 @@ The eye toggle on any row hides or shows that icon everywhere. Hiding writes Obs
 
 ## Quick menus
 
-Create any number of quick menus; each is one ribbon icon that opens its own command list, with an editable icon and name — click the name to rename it. Entries carry editable labels and icons, including Iconize packs and the built-in `ribbon-organizer` icon, and can be grouped with separators. Drag an entry to reorder it — drop on a row's top or bottom half to land before or after it; dropping an entry on a menu header sends it to that menu's end (its own header included). Every row shows the owning plugin, with the exact command id in the hover tooltip; a command not installed on this device is greyed out and recovers automatically once its plugin is back.
+Create any number of quick menus; each is one ribbon icon that opens its own command list, with an editable icon and name — click the name to rename it. Entries carry editable labels and icons, including Iconize packs and the built-in `ribbon-organizer` icon, and can be grouped with separators. Drag an entry to reorder it — drop on a row's top or bottom half to land before or after it; dropping an entry on a menu header sends it to that menu's end (its own header included). Every row shows the owning plugin, with the exact command id in the hover tooltip; a command not installed on this device is greyed out and recovers automatically once its plugin is back. A menu whose commands are all missing on this device shows no ribbon icon; once one of its plugins is back, the icon returns at the next launch.
 
 Renaming a menu changes its ribbon id, so it falls out of its ribbon group back into Ungrouped — re-drag it to restore.
 
