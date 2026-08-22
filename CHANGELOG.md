@@ -2,22 +2,9 @@
 
 ## 0.18.0
 
-### Reordering works on touch
-
-Dragging to reorder never worked on phones and tablets — the settings lists only answered to a mouse. Now every list drags on touch.
-
-#### Added
-
-- Touch drag on all three tabs — ribbon icons and groups, quick menu entries, status bar rows. The grip is the handle, and the rest of the row still scrolls the list. Drops land exactly as with a mouse: a row's top or bottom half inserts before or after it, a group or menu header takes the drop at its end, and the dragged row dims while it travels.
-- A changelog: every release's notes now also live in `CHANGELOG.md` in the repository, this entry included.
-
-#### Changed
-
-- The settings tabs show their label only on the active tab; the others are icon-only with the name in their tooltip — the same way Config Sync's tabs behave, and a better fit for the narrow Settings window.
-
-#### Known limits
-
-- While dragging on touch, the list does not scroll itself yet — make long moves in hops, or use a row's "Move to group" menu.
+- Added touch drag to every reorder list — ribbon icons and groups, quick menu entries, status bar rows. On phones and tablets the lists only answered to a mouse before; now the grip is the handle and the rest of the row still scrolls the list. Drops land exactly as with a mouse: a row's top or bottom half inserts before or after it, a group or menu header takes the drop at its end, and the dragged row dims while it travels. One limit for now: the list does not scroll itself while you drag — make long moves in hops, or use a row's "Move to group" menu
+- Changed the settings tabs to show their label only on the active tab; the others are icon-only with the name in their tooltip, a better fit for the narrow Settings window
+- Added this changelog: every release's notes now also live in `CHANGELOG.md` in the repository
 
 ## 0.17.2
 
