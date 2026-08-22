@@ -10,6 +10,8 @@ import {
   renameGroup,
 } from "../core/ribbonGroups";
 import { renderIcon } from "./iconRender";
+import { createPointerDragList } from "./pointerDrag";
+import type { DropIndicatorClass, HitTest } from "./pointerDrag";
 import { withScrollPreserved } from "./scrollKeep";
 import { IconSelectModal } from "./IconSelectModal";
 import type RibbonOrganizerPlugin from "../main";
@@ -29,6 +31,7 @@ export class GroupsSection {
   private expanded = new Set<string>(); // group ids; empty = all collapsed (session-only, like filterQuery)
   private refreshVisibility: () => void = () => {};
   private drag: DragPayload | null = null;
+  private pointerDrag = createPointerDragList<DragPayload>();
   private containerEl: HTMLElement | null = null;
 
   constructor(
@@ -42,6 +45,7 @@ export class GroupsSection {
   }
 
   private renderContent(containerEl: HTMLElement): void {
+    this.pointerDrag = createPointerDragList<DragPayload>();
     containerEl.empty();
     containerEl.createDiv({
       cls: "ribbon-organizer-tab-desc",
@@ -115,6 +119,8 @@ export class GroupsSection {
     const hdr = listEl.createDiv({ cls: "ribbon-organizer-rg-hdr", attr: { draggable: "true" } });
     const grip = hdr.createSpan({ cls: "ribbon-organizer-rg-grip" });
     setIcon(grip, "grip-vertical");
+    // Touch drags start on the grip only — the header itself must stay a scroll surface.
+    this.pointerDrag.wireHandle(grip, hdr, { type: "group", groupId: group.id });
     const chevron = hdr.createSpan({ cls: "ribbon-organizer-rg-chevron" });
     setIcon(chevron, this.expanded.has(group.id) ? "chevron-down" : "chevron-right");
     const nameEl = hdr.createSpan({ cls: "ribbon-organizer-rg-name", text: group.name });
@@ -188,6 +194,7 @@ export class GroupsSection {
     if (live?.hidden === true) row.addClass("is-hidden");
     const grip = row.createSpan({ cls: "ribbon-organizer-rg-grip" });
     setIcon(grip, "grip-vertical");
+    this.pointerDrag.wireHandle(grip, row, { type: "item", itemId, fromGroupId: group.id, fromIndex: memberIndex });
     const iconEl = row.createSpan({ cls: "ribbon-organizer-rg-icon" });
     if (live !== undefined) renderIcon(iconEl, live.icon, undefined, this.app);
     else setIcon(iconEl, "help");
@@ -244,44 +251,50 @@ export class GroupsSection {
   // Group payloads drop on headers only and get no indicator here; a drag that cannot move
   // anything (within ungrouped, where live order rules) gets none either.
   private wireItemDrop(row: HTMLElement, group: RibbonGroup, memberIndex: number): void {
-    const inert = (payload: DragPayload): boolean =>
-      payload.type === "group" || (group.id === UNGROUPED_ID && payload.fromGroupId === UNGROUPED_ID);
-    const zoneOf = (e: DragEvent): "before" | "after" => {
+    // The hitAt closure carries the target's whole drop behavior; the HTML5 listeners and
+    // the pointer path both resolve through it.
+    const hitAt: HitTest<DragPayload> = (payload, clientY) => {
+      if (payload.type === "group" || (group.id === UNGROUPED_ID && payload.fromGroupId === UNGROUPED_ID)) return null;
       const rect = row.getBoundingClientRect();
-      return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+      const zone = clientY < rect.top + rect.height / 2 ? "before" : "after";
+      return {
+        cls: zone === "before" ? "is-drop-before" : "is-drop-after",
+        drop: (): void => {
+          if (group.id === UNGROUPED_ID) {
+            this.plugin.settings.groups = moveItemToGroup(this.plugin.settings.groups, payload.itemId, UNGROUPED_ID);
+            this.persist();
+            return;
+          }
+          // Same-group moves account for the removal shifting later indexes.
+          let to = memberIndex + (zone === "after" ? 1 : 0);
+          if (payload.fromGroupId === group.id && payload.fromIndex < to) to -= 1;
+          if (payload.fromGroupId === group.id && payload.fromIndex === to) return;
+          this.plugin.settings.groups = moveItemToGroup(this.plugin.settings.groups, payload.itemId, group.id, to);
+          this.persist();
+        },
+      };
     };
+    this.pointerDrag.wireTarget(row, hitAt);
     const clear = (): void => {
       row.removeClass("is-drop-before");
       row.removeClass("is-drop-after");
     };
     row.addEventListener("dragover", (e) => {
-      if (this.drag === null || inert(this.drag)) return;
+      if (this.drag === null) return;
+      const hit = hitAt(this.drag, e.clientY);
+      if (hit === null) return;
       e.preventDefault();
-      const zone = zoneOf(e);
-      row.toggleClass("is-drop-before", zone === "before");
-      row.toggleClass("is-drop-after", zone === "after");
+      row.toggleClass("is-drop-before", hit.cls === "is-drop-before");
+      row.toggleClass("is-drop-after", hit.cls === "is-drop-after");
     });
     row.addEventListener("dragleave", clear);
     row.addEventListener("dragend", () => this.clearDrag());
     row.addEventListener("drop", (e) => {
       e.preventDefault();
-      const zone = zoneOf(e);
       clear();
       const payload = this.drag;
       this.drag = null;
-      if (payload === null || payload.type !== "item") return;
-      if (group.id === UNGROUPED_ID) {
-        if (payload.fromGroupId === UNGROUPED_ID) return; // reorder within ungrouped is a no-op (live order rules)
-        this.plugin.settings.groups = moveItemToGroup(this.plugin.settings.groups, payload.itemId, UNGROUPED_ID);
-        this.persist();
-        return;
-      }
-      // Same-group moves account for the removal shifting later indexes.
-      let to = memberIndex + (zone === "after" ? 1 : 0);
-      if (payload.fromGroupId === group.id && payload.fromIndex < to) to -= 1;
-      if (payload.fromGroupId === group.id && payload.fromIndex === to) return;
-      this.plugin.settings.groups = moveItemToGroup(this.plugin.settings.groups, payload.itemId, group.id, to);
-      this.persist();
+      if (payload !== null) hitAt(payload, e.clientY)?.drop();
     });
   }
 
@@ -316,8 +329,10 @@ export class GroupsSection {
   // Group headers take two payloads with two indicators: a dragged group inserts before the
   // header (accent top bar), a dragged item appends into the group (whole-frame highlight).
   private wireHeaderDrop(hdr: HTMLElement, onDrop: (payload: DragPayload) => void): void {
-    const classFor = (payload: DragPayload): string =>
+    const classFor = (payload: DragPayload): DropIndicatorClass =>
       payload.type === "group" ? "is-drop-target" : "ribbon-organizer-is-drop-into";
+    const hitAt: HitTest<DragPayload> = (payload) => ({ cls: classFor(payload), drop: () => onDrop(payload) });
+    this.pointerDrag.wireTarget(hdr, hitAt);
     const clear = (): void => {
       hdr.removeClass("is-drop-target");
       hdr.removeClass("ribbon-organizer-is-drop-into");
@@ -334,7 +349,7 @@ export class GroupsSection {
       clear();
       const payload = this.drag;
       this.drag = null;
-      if (payload !== null) onDrop(payload);
+      if (payload !== null) hitAt(payload, e.clientY)?.drop();
     });
   }
 

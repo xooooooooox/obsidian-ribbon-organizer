@@ -53,6 +53,8 @@
   box-shadow: inset 0 -2px 0 var(--interactive-accent); }
 .ribbon-organizer-is-drop-into { outline: 2px solid var(--interactive-accent); outline-offset: -2px;
   background-color: color-mix(in srgb, var(--interactive-accent) 12%, transparent); }
+/* Touch drags have no native drag ghost; dimming the source row is its stand-in. */
+.ribbon-organizer-drag-source { opacity: 0.5; }
 
 /* Ribbon grouping — divider between adjacent non-empty groups (desktop left ribbon and the
  * tablet drawer ribbon).
@@ -78,6 +80,9 @@
   cursor: pointer; color: var(--text-muted); border-bottom: 2px solid transparent;
   white-space: nowrap; flex: none; }
 .ribbon-organizer-tab.is-active { color: var(--text-normal); border-bottom-color: var(--interactive-accent); }
+/* All platforms: inactive tabs are icon-only; the active tab shows its label.
+   Obsidian 1.13 opens Settings in its own, narrower window. */
+.ribbon-organizer-tab:not(.is-active) .ribbon-organizer-tab-label { display: none; }
 .ribbon-organizer-tab-icon { display: flex; align-items: center; }
 .ribbon-organizer-tab-desc { color: var(--text-muted); font-size: var(--font-ui-small);
   margin-bottom: var(--size-4-3); }
@@ -103,7 +108,10 @@
 .ribbon-organizer-rg-btns .is-eye-off { color: var(--text-accent); }
 .ribbon-organizer-rg-btns .is-tucked { color: var(--text-accent); }
 .ribbon-organizer-rg-moreicon { border: 1px dashed var(--background-modifier-border-hover); border-radius: 6px; }
-.ribbon-organizer-rg-grip { display: inline-flex; color: var(--text-faint); cursor: grab; --icon-size: 14px; }
+/* touch-action is read from the touched element at pointerdown: none on the grip alone
+   makes grip-touch mean drag while the rows stay ordinary scroll surfaces. */
+.ribbon-organizer-rg-grip { display: inline-flex; color: var(--text-faint); cursor: grab; --icon-size: 14px;
+  touch-action: none; -webkit-touch-callout: none; user-select: none; }
 .ribbon-organizer-rg-icon { display: inline-flex; --icon-size: 16px; }
 .ribbon-organizer-rg-icon .svg-icon { flex: none; }
 .ribbon-organizer-rg-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -129,6 +137,8 @@
 .is-phone .ribbon-organizer-qm-name { max-width: none; flex: 1; min-width: 0; }
 .is-phone .ribbon-organizer-rg-hdr, .is-phone .ribbon-organizer-rg-item,
 .is-phone .ribbon-organizer-qm-hdr { min-height: 40px; }
+/* Finger-sized grip hit area; the negative margin cancels the layout shift. */
+body.is-mobile .ribbon-organizer-rg-grip { padding: 8px 6px; margin: -8px -6px; }
 .is-phone .ribbon-organizer-rg-plugin { display: none; }
 /* The plugin badge is the row's auto-margin carrier on desktop; with it display-none on phones
  * the buttons take over right-alignment and the missing note follows the title. */

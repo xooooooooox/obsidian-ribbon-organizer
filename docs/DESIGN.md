@@ -67,7 +67,8 @@ All icons are lucide via `setIcon`, one icon per meaning, everywhere:
 
 ## Interaction
 
-- Drag: insert uses half-zone semantics (upper half = before, lower half = after); a row that contains a permanent input is dragged by its grip only; container headers accept append-to-end drops.
+- Drag: insert uses half-zone semantics (upper half = before, lower half = after); a row that contains a permanent input is dragged by its grip only; container headers accept append-to-end drops. On touch, the grip is always the drag handle — rows stay scroll surfaces — and the dragged row dims to 50% in place of a native drag ghost.
+- Settings tabs: the active tab shows icon + label; inactive tabs are icon-only with the name in their tooltip (Obsidian 1.13 opens Settings in its own, narrower window).
 - Rename: click the name to edit in place; Enter commits, Escape restores.
 - Entry rows show the owning plugin's name; the raw command id lives in the hover tooltip.
 - Collapse: the whole header row toggles; buttons and inputs inside it are exempt. Collapsed state is session-only; newly created items start expanded.

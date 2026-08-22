@@ -1,5 +1,7 @@
 import { App, ExtraButtonComponent, Setting, setIcon } from "obsidian";
 import { fallbackItemName, splitStatusBarId, statusBarRowIds } from "../core/statusBarItems";
+import { createPointerDragList } from "./pointerDrag";
+import type { HitTest } from "./pointerDrag";
 import { withScrollPreserved } from "./scrollKeep";
 import { StatusBarItemModal } from "./StatusBarItemModal";
 import { MODE_ICON, MODE_NAME, MODE_NEXT } from "./statusBarMode";
@@ -13,6 +15,7 @@ import type { StatusBarSnapshotItem } from "../main";
 // lock and are neither draggable nor drop targets; the eye still works on them.
 export class StatusBarSection {
   private drag: string | null = null; // dragged row id
+  private pointerDrag = createPointerDragList<string>();
   private containerEl: HTMLElement | null = null;
   // Spotlight listeners attach to FOREIGN DOM (the real status bar items); every re-render
   // must detach the previous set and strip any lingering spot class.
@@ -39,6 +42,7 @@ export class StatusBarSection {
 
   private renderContent(containerEl: HTMLElement): void {
     this.teardown();
+    this.pointerDrag = createPointerDragList<string>();
     containerEl.empty();
     new Setting(containerEl)
       .setName("Show on phones and tablets")
@@ -170,7 +174,8 @@ export class StatusBarSection {
     // Spotlight: hidden items have no visible body, missing items no body at all.
     if (live !== undefined && !live.hidden && live.shown) this.wireSpot(row, clone, liveEl);
 
-    if (pinned) return; // pinned rows neither drag nor accept drops
+    if (pinned) return; // pinned rows neither drag nor accept drops (their span is a lock, never a wired grip)
+    this.pointerDrag.wireHandle(grip, row, id);
     row.addEventListener("dragstart", (e) => {
       this.drag = id;
       e.dataTransfer?.setData("text/plain", ""); // some platforms refuse to start a drag without data
@@ -217,7 +222,11 @@ export class StatusBarSection {
     return aria !== "" ? aria : fallbackItemName(key);
   }
 
+  // The hitAt closure carries the target's whole drop behavior; the HTML5 listeners and the
+  // pointer path both resolve through it.
   private wireDrop(el: HTMLElement, onDrop: (draggedId: string) => void): void {
+    const hitAt: HitTest<string> = (draggedId) => ({ cls: "is-drop-target", drop: () => onDrop(draggedId) });
+    this.pointerDrag.wireTarget(el, hitAt);
     el.addEventListener("dragover", (e) => {
       if (this.drag === null) return;
       e.preventDefault();
@@ -233,27 +242,41 @@ export class StatusBarSection {
       el.removeClass("is-drop-target");
       const draggedId = this.drag;
       this.drag = null;
-      if (draggedId !== null) onDrop(draggedId);
+      if (draggedId !== null) hitAt(draggedId, e.clientY)?.drop();
     });
   }
 
   // Half-zone insertion: the pointer's vertical half decides before/after, so the last
   // row's bottom half reaches the end of the list.
   private wireRowDrop(row: HTMLElement, id: string, rowIds: string[]): void {
-    const zoneOf = (e: DragEvent): "before" | "after" => {
+    const hitAt: HitTest<string> = (draggedId, clientY) => {
       const rect = row.getBoundingClientRect();
-      return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+      const zone = clientY < rect.top + rect.height / 2 ? "before" : "after";
+      return {
+        cls: zone === "before" ? "is-drop-before" : "is-drop-after",
+        drop: (): void => {
+          if (draggedId === id) return;
+          const out = rowIds.filter((r) => r !== draggedId);
+          let to = out.indexOf(id);
+          if (to === -1) return;
+          if (zone === "after") to += 1;
+          out.splice(to, 0, draggedId);
+          this.persist(out);
+        },
+      };
     };
+    this.pointerDrag.wireTarget(row, hitAt);
     const clear = (): void => {
       row.removeClass("is-drop-before");
       row.removeClass("is-drop-after");
     };
     row.addEventListener("dragover", (e) => {
       if (this.drag === null) return;
+      const hit = hitAt(this.drag, e.clientY);
+      if (hit === null) return;
       e.preventDefault();
-      const zone = zoneOf(e);
-      row.toggleClass("is-drop-before", zone === "before");
-      row.toggleClass("is-drop-after", zone === "after");
+      row.toggleClass("is-drop-before", hit.cls === "is-drop-before");
+      row.toggleClass("is-drop-after", hit.cls === "is-drop-after");
     });
     row.addEventListener("dragleave", clear);
     row.addEventListener("dragend", () => {
@@ -262,17 +285,10 @@ export class StatusBarSection {
     });
     row.addEventListener("drop", (e) => {
       e.preventDefault();
-      const zone = zoneOf(e);
       clear();
       const draggedId = this.drag;
       this.drag = null;
-      if (draggedId === null || draggedId === id) return;
-      const out = rowIds.filter((r) => r !== draggedId);
-      let to = out.indexOf(id);
-      if (to === -1) return;
-      if (zone === "after") to += 1;
-      out.splice(to, 0, draggedId);
-      this.persist(out);
+      if (draggedId !== null) hitAt(draggedId, e.clientY)?.drop();
     });
   }
 

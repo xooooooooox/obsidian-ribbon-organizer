@@ -5,8 +5,12 @@ import { QuickEntry, QuickMenu, isSeparator } from "../core/types";
 import { CommandSelectModal } from "./CommandSelectModal";
 import { IconSelectModal } from "./IconSelectModal";
 import { renderIcon } from "./iconRender";
+import { createPointerDragList } from "./pointerDrag";
+import type { HitTest } from "./pointerDrag";
 import { withScrollPreserved } from "./scrollKeep";
 import type RibbonOrganizerPlugin from "../main";
+
+type EntryRef = { menuId: string; index: number };
 
 // "Quick menus" settings section: one collapsible section per menu (same collapse pattern
 // as GroupsSection — default collapsed, session-only expanded set, a new menu starts expanded).
@@ -16,7 +20,8 @@ import type RibbonOrganizerPlugin from "../main";
 export class QuickMenusSection {
   private expanded = new Set<string>(); // menu ids; empty = all collapsed (session-only)
   private containerEl: HTMLElement | null = null;
-  private drag: { menuId: string; index: number } | null = null;
+  private drag: EntryRef | null = null;
+  private pointerDrag = createPointerDragList<EntryRef>();
 
   constructor(
     private app: App,
@@ -29,6 +34,7 @@ export class QuickMenusSection {
   }
 
   private renderContent(containerEl: HTMLElement): void {
+    this.pointerDrag = createPointerDragList<EntryRef>();
     containerEl.empty();
     containerEl.createDiv({
       cls: "ribbon-organizer-tab-desc",
@@ -133,7 +139,7 @@ export class QuickMenusSection {
   }
 
   // Removes and returns the dragged entry from its source menu; null if the source vanished.
-  private takeEntry(from: { menuId: string; index: number }): QuickEntry | null {
+  private takeEntry(from: EntryRef): QuickEntry | null {
     const src = this.plugin.settings.menus.find((m) => m.id === from.menuId);
     const moved = src?.entries.splice(from.index, 1)[0];
     return moved ?? null;
@@ -141,7 +147,7 @@ export class QuickMenusSection {
 
   // Insert relative to the target row: upper half = before, lower half = after; same-menu
   // moves account for the removal shifting later indexes.
-  private dropOnRow(from: { menuId: string; index: number }, menu: QuickMenu, index: number, zone: "before" | "after"): void {
+  private dropOnRow(from: EntryRef, menu: QuickMenu, index: number, zone: "before" | "after"): void {
     let to = index + (zone === "after" ? 1 : 0);
     if (from.menuId === menu.id && from.index < to) to -= 1;
     if (from.menuId === menu.id && from.index === to) return;
@@ -152,7 +158,11 @@ export class QuickMenusSection {
   }
 
   // Menu headers are append-to-end targets: whole-frame highlight, no insert position.
-  private wireDropInto(el: HTMLElement, onDrop: (from: { menuId: string; index: number }) => void): void {
+  // The hitAt closure carries the target's whole drop behavior; the HTML5 listeners and the
+  // pointer path both resolve through it.
+  private wireDropInto(el: HTMLElement, onDrop: (from: EntryRef) => void): void {
+    const hitAt: HitTest<EntryRef> = (from) => ({ cls: "ribbon-organizer-is-drop-into", drop: () => onDrop(from) });
+    this.pointerDrag.wireTarget(el, hitAt);
     el.addEventListener("dragover", (e) => {
       if (this.drag === null) return;
       e.preventDefault();
@@ -164,7 +174,7 @@ export class QuickMenusSection {
       el.removeClass("ribbon-organizer-is-drop-into");
       const from = this.drag;
       this.drag = null;
-      if (from !== null) onDrop(from);
+      if (from !== null) hitAt(from, e.clientY)?.drop();
     });
   }
 
@@ -172,29 +182,34 @@ export class QuickMenusSection {
   // the pointer's vertical half decides before/after, so the last row's bottom half reaches
   // the end of the list.
   private wireRowDrop(row: HTMLElement, menu: QuickMenu, index: number): void {
-    const zoneOf = (e: DragEvent): "before" | "after" => {
+    const hitAt: HitTest<EntryRef> = (from, clientY) => {
       const rect = row.getBoundingClientRect();
-      return e.clientY < rect.top + rect.height / 2 ? "before" : "after";
+      const zone = clientY < rect.top + rect.height / 2 ? "before" : "after";
+      return {
+        cls: zone === "before" ? "is-drop-before" : "is-drop-after",
+        drop: () => this.dropOnRow(from, menu, index, zone),
+      };
     };
+    this.pointerDrag.wireTarget(row, hitAt);
     const clear = (): void => {
       row.removeClass("is-drop-before");
       row.removeClass("is-drop-after");
     };
     row.addEventListener("dragover", (e) => {
       if (this.drag === null) return;
+      const hit = hitAt(this.drag, e.clientY);
+      if (hit === null) return;
       e.preventDefault();
-      const zone = zoneOf(e);
-      row.toggleClass("is-drop-before", zone === "before");
-      row.toggleClass("is-drop-after", zone === "after");
+      row.toggleClass("is-drop-before", hit.cls === "is-drop-before");
+      row.toggleClass("is-drop-after", hit.cls === "is-drop-after");
     });
     row.addEventListener("dragleave", clear);
     row.addEventListener("drop", (e) => {
       e.preventDefault();
-      const zone = zoneOf(e);
       clear();
       const from = this.drag;
       this.drag = null;
-      if (from !== null) this.dropOnRow(from, menu, index, zone);
+      if (from !== null) hitAt(from, e.clientY)?.drop();
     });
   }
 
@@ -206,6 +221,7 @@ export class QuickMenusSection {
     const wireDrag = (row: HTMLElement, idx: number): void => {
       const grip = row.createSpan({ cls: "ribbon-organizer-rg-grip", attr: { draggable: "true" } });
       setIcon(grip, "grip-vertical");
+      this.pointerDrag.wireHandle(grip, row, { menuId: menu.id, index: idx });
       grip.addEventListener("dragstart", (e) => {
         this.drag = { menuId: menu.id, index: idx };
         e.dataTransfer?.setData("text/plain", ""); // some platforms refuse to start a drag without data

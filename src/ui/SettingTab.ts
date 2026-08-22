@@ -1,4 +1,4 @@
-import { App, PluginSettingTab, setIcon } from "obsidian";
+import { App, PluginSettingTab, setIcon, setTooltip } from "obsidian";
 import type { SettingDefinitionItem } from "obsidian";
 import { GroupsSection } from "./GroupsSection";
 import { QuickMenusSection } from "./QuickMenusSection";
@@ -69,7 +69,9 @@ export class RibbonOrganizerSettingTab extends PluginSettingTab {
     for (const tab of TABS) {
       const el = nav.createEl("button", { cls: "ribbon-organizer-tab" });
       setIcon(el.createSpan({ cls: "ribbon-organizer-tab-icon" }), tab.icon);
-      el.createSpan({ text: tab.label });
+      el.createSpan({ cls: "ribbon-organizer-tab-label", text: tab.label });
+      setTooltip(el, tab.label); // inactive tabs are icon-only (CSS); the tooltip keeps them legible
+      el.setAttr("aria-label", tab.label);
       if (tab.id === this.activeTab) el.addClass("is-active");
       el.addEventListener("click", () => {
         this.activeTab = tab.id;
