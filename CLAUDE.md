@@ -2,6 +2,14 @@
 
 Obsidian plugin: the ribbon & status bar housekeeper — orders the left-ribbon icons into named groups with divider lines, launches commands from configurable ribbon menus, and reorders/hides/restyles status bar items (modes, {name} rewrite rules with icons and colors, mobile pill). Grouping spec: `docs/superpowers/specs/2026-07-23-ribbon-grouping-design.md` (read it before changing `applyGrouping` or the settings panel); phone-menu spec: `docs/superpowers/specs/2026-07-24-mobile-menu-and-settings-polish-design.md` (read it before changing `observeMenus`/`groupRibbonMenu`). Status-bar specs: `docs/superpowers/specs/2026-07-28-statusbar-*.md` and `2026-07-29-*.md` (read the matching one before changing `applyStatusBarOrder`, the rewrite engine, or `StatusBarSection`). The Quick menus feature (formerly Quick commands) was extracted from [obsidian-config-sync](https://github.com/xooooooooox/obsidian-config-sync); the extraction spec lives in that repo.
 
+## Doc map
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the live code map, invariants and extension points. Read it before structural changes.
+- [`docs/DESIGN.md`](docs/DESIGN.md) — the visual and copy language. Read it before any UI work; update it in the same branch as any UI change.
+- [`docs/GUIDE.md`](docs/GUIDE.md) — the user guide (behavioral detail lives there, not in the READMEs). `README.md`/`README.zh.md` are the short pitch, kept in sync with each other.
+- [`CHANGELOG.md`](CHANGELOG.md) — what changed in each release, newest first. A release's GitHub notes are its entry here (headings demoted one level); nothing else records version history.
+- `docs/superpowers/specs/` and `docs/superpowers/plans/` — historical design/working documents, ordered by date. Useful for rationale archaeology; never a statement of the current system — the live docs above are.
+
 ## Commands
 
 - `npm run dev` — esbuild watch → `main.js`
@@ -9,7 +17,7 @@ Obsidian plugin: the ribbon & status bar housekeeper — orders the left-ribbon 
 - `npm test` — vitest; covers the pure `src/core/` layer only
 - `npm run lint` — baseline is **zero warnings**
 - `npm run smoke:install` — build and install into `./dev/vault` (gitignored) under plugin id `ribbon-organizer`
-- Releasing: `npm version <x.y.z>` → `git push --follow-tags` → CI drafts the release → hand-write the release notes → publish the draft (BRAT needs a published release). Tags carry no `v` prefix. ⚠️ Force-pushing a tag re-triggers the release workflow on this repo — delete the duplicate draft it spawns.
+- Releasing: `npm version <x.y.z>` → `git push --follow-tags` → CI drafts the release → hand-write the release notes and add them as the release's `CHANGELOG.md` entry → publish the draft (BRAT needs a published release). Tags carry no `v` prefix. ⚠️ Force-pushing a tag re-triggers the release workflow on this repo — delete the duplicate draft it spawns.
 
 ## Architecture
 
@@ -44,4 +52,5 @@ Unlike config-sync, this repo has no `template` git remote: the toolchain files 
 
 - Errors must carry context (group id, item id, command id). No silent fallback — the `ribbonInternals()`/statusBar null → Notice + session latch is the only sanctioned incompatibility path.
 - Grouping runs on every platform through two mechanisms — desktop/tablet via flex `order` (`applyGrouping`), phones via the observed navbar ribbon menu (`observeMenus`/`groupRibbonMenu`); quick menus must keep working on mobile (`isDesktopOnly: false`).
-- Documentation currency: when a change alters user-facing behavior (features, UI, settings, workflows), update the affected docs in the SAME branch — `README.md` and `README.zh.md` (keep the two in sync), `docs/GUIDE.md` (the user guide — behavioral detail lives there, not in the READMEs), and `docs/ARCHITECTURE.md` (code map / invariants, when structure changes). Pure internal refactors that change nothing a user sees need no doc edit. Gate: docs must be current before merging to `main` and before cutting a release.
+- Documentation currency: when a change alters user-facing behavior (features, UI, settings, workflows), update the affected docs in the SAME branch — `README.md` and `README.zh.md` (keep the two in sync), `docs/GUIDE.md` (the user guide — behavioral detail lives there, not in the READMEs), `docs/DESIGN.md` (for UI changes), and `docs/ARCHITECTURE.md` (code map / invariants, when structure changes). Pure internal refactors that change nothing a user sees need no doc edit. Gate: docs must be current before merging to `main` and before cutting a release.
+- Docs state the current system, not its history: `README*`, `docs/GUIDE.md`, `docs/ARCHITECTURE.md` and `docs/DESIGN.md` describe how the plugin behaves now; what changed in which release belongs in `CHANGELOG.md`. "As of this version", "used to", and "no longer" are the shapes to catch.
