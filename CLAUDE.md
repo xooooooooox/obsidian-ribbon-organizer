@@ -7,7 +7,7 @@ Obsidian plugin: the ribbon & status bar housekeeper — orders the left-ribbon 
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the live code map, invariants and extension points. Read it before structural changes.
 - [`docs/DESIGN.md`](docs/DESIGN.md) — the visual and copy language. Read it before any UI work; update it in the same branch as any UI change.
 - [`docs/GUIDE.md`](docs/GUIDE.md) — the user guide (behavioral detail lives there, not in the READMEs). `README.md`/`README.zh.md` are the short pitch, kept in sync with each other.
-- [`CHANGELOG.md`](CHANGELOG.md) — what changed in each release, newest first. A release's GitHub notes are its entry here; nothing else records version history. From 0.18.0 on, entries follow config-sync's format — flat bullets starting with Added/Changed/Fixed, no headline, no trailing periods; the pre-0.18.0 backfill keeps the old headline style its releases shipped with.
+- [`CHANGELOG.md`](CHANGELOG.md) — what changed in each release, newest first. A release's GitHub notes are its entry here; nothing else records version history. From 0.18.0 on, an entry is flat bullets, each starting with Added/Changed/Fixed — no headline, no sections, no trailing periods; the pre-0.18.0 backfill keeps the headline style its releases shipped with.
 - `docs/superpowers/specs/` and `docs/superpowers/plans/` — historical design/working documents, ordered by date. Useful for rationale archaeology; never a statement of the current system — the live docs above are.
 
 ## Commands
