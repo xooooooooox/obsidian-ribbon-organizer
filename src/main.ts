@@ -20,6 +20,7 @@ interface RibbonOrganizerSettings {
   statusBarOrder: string[];       // status bar item ids, left-to-right; [] = never reordered, bar stays native
   statusBarHidden: string[];      // item ids hidden by this plugin's own layer (Commander's plugin-level hides merge in at read time)
   statusBarShowOnMobile: boolean; // floating pill on phones/tablets (styles.css, body-class gated)
+  statusBarTabletStyle: "pill" | "docked"; // tablets only: floating pill, or a desktop-like bar docked in the corner
   statusBarModes: Record<string, "compact" | "icon">; // absent id = Full (not stored)
   statusBarRules: Record<string, StatusBarRule[]>;    // per-item text rewrite templates
 }
@@ -131,6 +132,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
     statusBarOrder: [],
     statusBarHidden: [],
     statusBarShowOnMobile: false,
+    statusBarTabletStyle: "pill",
     statusBarModes: {},
     statusBarRules: {},
   };
@@ -183,6 +185,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
     this.statusBarObserver?.disconnect();
     this.statusBarObserver = null;
     document.body.removeClass("ribbon-organizer-mobile-sb");
+    document.body.removeClass("ribbon-organizer-sb-docked");
     if (this.statusBarSeenTimer !== null) {
       window.clearTimeout(this.statusBarSeenTimer);
       this.statusBarSeenTimer = null;
@@ -224,6 +227,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
       statusBarOrder?: unknown;
       statusBarHidden?: unknown;
       statusBarShowOnMobile?: unknown;
+      statusBarTabletStyle?: unknown;
       statusBarModes?: unknown;
       statusBarRules?: unknown;
       statusBarSeen?: unknown;
@@ -237,6 +241,7 @@ export default class RibbonOrganizerPlugin extends Plugin {
       statusBarOrder: normalizeStatusBarOrder(raw.statusBarOrder),
       statusBarHidden: normalizeStatusBarOrder(raw.statusBarHidden),
       statusBarShowOnMobile: raw.statusBarShowOnMobile === true,
+      statusBarTabletStyle: raw.statusBarTabletStyle === "docked" ? "docked" : "pill",
       statusBarModes: normalizeStatusBarModes(raw.statusBarModes),
       statusBarRules: normalizeStatusBarRules(raw.statusBarRules),
     };
@@ -409,9 +414,12 @@ export default class RibbonOrganizerPlugin extends Plugin {
   }
 
   // The mobile pill styles in styles.css are gated on this body class; desktop never gets
-  // it even when the synced setting is on.
+  // it even when the synced setting is on. The docked class only matters combined with
+  // `.is-tablet` in styles.css, so phones carry it harmlessly when the synced setting says so.
   applyMobileStatusBarClass(): void {
-    document.body.toggleClass("ribbon-organizer-mobile-sb", Platform.isMobile && this.settings.statusBarShowOnMobile);
+    const on = Platform.isMobile && this.settings.statusBarShowOnMobile;
+    document.body.toggleClass("ribbon-organizer-mobile-sb", on);
+    document.body.toggleClass("ribbon-organizer-sb-docked", on && this.settings.statusBarTabletStyle === "docked");
   }
 
   // All Text nodes under a status bar item — rules touch these, never element structure.

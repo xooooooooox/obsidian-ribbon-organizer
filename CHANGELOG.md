@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.18.2
+
+- Added a "Tablet style" dropdown under the mobile status bar toggle: keep the floating pill, or dock the bar flush in the bottom-right corner like the desktop status bar. Tablets only; phones keep the pill above the toolbar
+- Changed the tablet pill to sit a flat 10px above the bottom edge instead of clearing the home-indicator band. The indicator is centered while the pill sits in the corner, so they never overlap — and with a hardware keyboard the indicator is hidden entirely, which made the reserved band read as a dead gap
+
 ## 0.18.1
 
 - Fixed the mobile status bar pill floating high above the bottom edge and overlapping note text on tablets (#1). The pill's offset cleared the phone layout's bottom toolbar — chrome the tablet layout doesn't have. Tablets now place the pill in the bottom-right corner of the screen, just above the safe area, like the desktop status bar; phones are unchanged

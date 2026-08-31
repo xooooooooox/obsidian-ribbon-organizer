@@ -54,6 +54,20 @@ export class StatusBarSection {
         })
       );
 
+    new Setting(containerEl)
+      .setName("Tablet style")
+      .setDesc("How the bar sits on tablets: a floating pill above the corner, or docked flush in the corner like on desktop. Phones always use the pill above the toolbar.")
+      .addDropdown((dropdown) =>
+        dropdown
+          .addOption("pill", "Floating pill")
+          .addOption("docked", "Docked in the corner")
+          .setValue(this.plugin.settings.statusBarTabletStyle)
+          .onChange((value) => {
+            this.plugin.settings.statusBarTabletStyle = value === "docked" ? "docked" : "pill";
+            void this.plugin.saveSettings().then(() => this.plugin.applyMobileStatusBarClass());
+          })
+      );
+
     containerEl.createDiv({
       cls: "ribbon-organizer-tab-desc",
       text: "Drag to reorder the status bar; the eye hides an item everywhere. The same order and visibility apply on every device; items a device doesn't have are skipped there.",

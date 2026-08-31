@@ -281,19 +281,41 @@ body.is-mobile .ribbon-organizer-sbm-rule { gap: 9px; margin: 12px 0 10px; }
  * no safe-area-inset-bottom there — adding it double-counts and lifts
  * the pill too high. That reasoning holds only where a bottom navbar
  * exists: the tablet layout has none, so the same clearance parks the
- * pill mid-text (issue #1); tablets clear the safe area instead and
- * hug the bottom edge like the desktop status bar. In both cases
+ * pill mid-text (issue #1).
+ *
+ * TABLETS deliberately ignore the safe-area envelope too: iPadOS
+ * reserves a 20px bottom inset for the home indicator, but the
+ * indicator is horizontally CENTERED while the bar sits in the right
+ * corner — they never overlap, and with a hardware keyboard the
+ * indicator is hidden entirely, which made the reserved band read as
+ * a dead gap. A flat 10px keeps the pill clear of the very edge,
+ * where the swipe-up and Quick Note corner gestures start.
  * --ribbon-organizer-sb-gap is the gap above the bottom baseline
- * (navbar top on phones, safe-area top on tablets) and the only knob
+ * (navbar top on phones, window bottom on tablets) and the only knob
  * (overridable from a user snippet; deliberately not a setting).
+ *
+ * Tablets also offer a second style via the `Tablet style` setting
+ * (body class `ribbon-organizer-sb-docked`): a desktop-like bar
+ * docked flush in the corner — same height as the pill, square
+ * against both edges, no shadow.
  * ============================================================ */
 body.ribbon-organizer-mobile-sb.is-mobile {
   --ribbon-organizer-sb-gap: 32px;
   --ribbon-organizer-sb-bottom: calc(var(--mobile-toolbar-height, 52px) + var(--ribbon-organizer-sb-gap, 32px));
 }
 body.ribbon-organizer-mobile-sb.is-tablet {
-  --ribbon-organizer-sb-gap: 12px;
-  --ribbon-organizer-sb-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--ribbon-organizer-sb-gap, 12px));
+  --ribbon-organizer-sb-gap: 10px;
+  --ribbon-organizer-sb-bottom: var(--ribbon-organizer-sb-gap);
+}
+body.ribbon-organizer-mobile-sb.is-tablet.ribbon-organizer-sb-docked {
+  --ribbon-organizer-sb-bottom: 0px;
+}
+body.ribbon-organizer-mobile-sb.is-tablet.ribbon-organizer-sb-docked .status-bar:not(.ribbon-organizer-sb-strip) {
+  right: 0;
+  border-radius: var(--radius-s) 0 0 0;
+  border-right-width: 0;
+  border-bottom-width: 0;
+  box-shadow: none;
 }
 body.ribbon-organizer-mobile-sb.is-mobile .status-bar:not(.ribbon-organizer-sb-strip) {
   display: flex !important;        /* core hides the bar on mobile */
