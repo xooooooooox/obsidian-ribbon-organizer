@@ -64,6 +64,7 @@ All icons are lucide via `setIcon`, one icon per meaning, everywhere:
 - `.is-phone`: rows wrap to two lines rather than truncate; touch targets ≥ 40px; decorative info (chips, previews) hides and the spring moves to the buttons.
 - `body.is-mobile` (no hover anywhere): hover-only affordances become always-visible and grow (clear badge 17px with a 2px ring, color dot 28px, icon button 34px); iOS color input must be a real tap target, not a programmatic `.click()`.
 - Floating status-bar pill: gated by `body.ribbon-organizer-mobile-sb`; one theming knob `--ribbon-organizer-sb-gap` (deliberately a CSS variable, not a setting); slides out with the navbar while scrolling or typing; `!important` only where fighting themes, always with a comment saying which fight.
+- Pill bottom baseline is per-layout: phones clear the bottom navbar (`--mobile-toolbar-height` + gap, no safe-area term — the navbar box already covers the home indicator); tablets have no bottom navbar, so they clear the safe area instead (`env(safe-area-inset-bottom)` + gap) and hug the bottom edge like the desktop status bar. `--ribbon-organizer-sb-gap` means the same thing in both: the gap above that baseline (32px on phones, 12px on tablets).
 
 ## Interaction
 

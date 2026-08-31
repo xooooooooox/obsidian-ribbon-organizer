@@ -276,15 +276,24 @@ body.is-mobile .ribbon-organizer-sbm-rule { gap: 9px; margin: 12px 0 10px; }
  * that behaves like native bottom chrome: hides while scrolling
  * (.is-hidden-nav) and while typing (.cm-focused), floats back idle.
  *
- * Clearance = Obsidian's live --mobile-toolbar-height + a gap. The
- * navbar box already covers the home-indicator safe area, so NO
- * safe-area-inset-bottom here — adding it double-counts and lifts the
- * pill too high. --ribbon-organizer-sb-gap is the only knob
+ * Clearance on PHONES = Obsidian's live --mobile-toolbar-height + a
+ * gap: the navbar box already covers the home-indicator safe area, so
+ * no safe-area-inset-bottom there — adding it double-counts and lifts
+ * the pill too high. That reasoning holds only where a bottom navbar
+ * exists: the tablet layout has none, so the same clearance parks the
+ * pill mid-text (issue #1); tablets clear the safe area instead and
+ * hug the bottom edge like the desktop status bar. In both cases
+ * --ribbon-organizer-sb-gap is the gap above the bottom baseline
+ * (navbar top on phones, safe-area top on tablets) and the only knob
  * (overridable from a user snippet; deliberately not a setting).
  * ============================================================ */
 body.ribbon-organizer-mobile-sb.is-mobile {
   --ribbon-organizer-sb-gap: 32px;
   --ribbon-organizer-sb-bottom: calc(var(--mobile-toolbar-height, 52px) + var(--ribbon-organizer-sb-gap, 32px));
+}
+body.ribbon-organizer-mobile-sb.is-tablet {
+  --ribbon-organizer-sb-gap: 12px;
+  --ribbon-organizer-sb-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--ribbon-organizer-sb-gap, 12px));
 }
 body.ribbon-organizer-mobile-sb.is-mobile .status-bar:not(.ribbon-organizer-sb-strip) {
   display: flex !important;        /* core hides the bar on mobile */

@@ -44,7 +44,7 @@ A preview strip mirrors the real bar. Hovering a row, the preview, or the bar it
 
 #### Mobile
 
-Obsidian hides the status bar on mobile by default. The "Show on phones and tablets" toggle floats it above the toolbar as a pill.
+Obsidian hides the status bar on mobile by default. The "Show on phones and tablets" toggle floats it as a pill: on phones just above the bottom toolbar, on tablets (which have no bottom toolbar) in the bottom-right corner of the screen, like the desktop status bar.
 
 ## Diagnostics
 

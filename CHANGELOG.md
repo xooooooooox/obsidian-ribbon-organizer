@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.18.1
+
+- Fixed the mobile status bar pill floating high above the bottom edge and overlapping note text on tablets (#1). The pill's offset cleared the phone layout's bottom toolbar — chrome the tablet layout doesn't have. Tablets now place the pill in the bottom-right corner of the screen, just above the safe area, like the desktop status bar; phones are unchanged
+
 ## 0.18.0
 
 - Added touch drag to every reorder list — ribbon icons and groups, quick menu entries, status bar rows. On phones and tablets the lists only answered to a mouse before; now the grip is the handle and the rest of the row still scrolls the list. Drops land exactly as with a mouse: a row's top or bottom half inserts before or after it, a group or menu header takes the drop at its end, and the dragged row dims while it travels. One limit for now: the list does not scroll itself while you drag — make long moves in hops, or use a row's "Move to group" menu
