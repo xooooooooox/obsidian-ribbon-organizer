@@ -3,6 +3,7 @@ import { CmdrHideLists, cmdrHideStyleText, withTitle } from "./core/commanderHid
 import { BRAND_ICON_ID, BRAND_ICON_SVG } from "./core/icons";
 import { presentQuickMenuEntries, quickMenuEntries } from "./core/quickCommands";
 import { defaultMenus, normalizeMenus } from "./core/quickMenus";
+import { REAPPLY_BURST_LIMIT, REAPPLY_BURST_WINDOW_MS, RIBBON_ARRANGER_PLUGINS, pushReapplySample } from "./core/ribbonConflict";
 import { RibbonGroup, UNGROUPED_ID, computeMenuRows, computeRibbonLayout, defaultGroups, normalizeGroups, normalizeMoreIcon, normalizeMoreTucked, pruneTucked } from "./core/ribbonGroups";
 import { cmdrHiddenSiblings, computeStatusBarOrder, deriveStatusBarIds, normalizeStatusBarOrder, splitStatusBarId } from "./core/statusBarItems";
 import { SEEN_CAP, StatusBarRule, applyStatusBarRules, normalizeStatusBarModes, normalizeStatusBarRules, normalizeStatusBarSeen, pushSeen } from "./core/statusBarRules";
@@ -139,6 +140,12 @@ export default class RibbonOrganizerPlugin extends Plugin {
   private menuIcons: { name: string; el: HTMLElement }[] = [];
   private ribbonObserver: MutationObserver | null = null;
   private groupingDisabled = false;
+  // Conflict standdown state: true while grouping has cleaned up and yielded the ribbon to a
+  // known arranger plugin (see ribbonArrangerConflict). Unlike groupingDisabled this is not a
+  // session latch — the observer keeps watching, and grouping resumes when the arranger goes.
+  private conflictStoodDown = false;
+  private conflictNoticeShown = false; // the standdown Notice fires once per session, not once per pass
+  private reapplySamples: number[] = []; // observer-trigger timestamps inside the burst window
   private menuObserver: MutationObserver | null = null;
   private lastMenuOutcome = "not-run"; // surfaced by the diagnostics command
   private statusBarObserver: MutationObserver | null = null;
@@ -208,13 +215,21 @@ export default class RibbonOrganizerPlugin extends Plugin {
     }
     const internals = ribbonInternals(this.app);
     if (internals === null) return;
+    this.restoreRibbon(internals);
+  }
+
+  // Puts the ribbon back in its stock state: clears every order this plugin wrote, strips its
+  // element-anchored classes, and sweeps its injected chrome. The sweep is subtree-wide, not
+  // direct-children-only: a coexisting arranger plugin may have adopted a divider or the more
+  // button into its own wrappers, and both class names are exclusively this plugin's.
+  private restoreRibbon(internals: RibbonInternals): void {
     for (const item of internals.items) {
       item.buttonEl?.setCssStyles({ order: "" });
       // Our stylesheet dies with the plugin, but the classes must not linger on foreign elements.
       item.buttonEl?.removeClass("ribbon-organizer-cmdr-hidden");
       item.buttonEl?.removeClass("ribbon-organizer-tucked");
     }
-    for (const el of Array.from(internals.ribbonItemsEl.querySelectorAll(":scope > .ribbon-organizer-divider, :scope > .ribbon-organizer-more"))) el.remove();
+    for (const el of Array.from(internals.ribbonItemsEl.querySelectorAll(".ribbon-organizer-divider, .ribbon-organizer-more"))) el.remove();
   }
 
   async loadSettings(): Promise<void> {
@@ -274,6 +289,20 @@ export default class RibbonOrganizerPlugin extends Plugin {
     const access = cmdrAccess(this.app);
     if (access.state !== "ok") return new Set();
     return new Set(access.plugin.settings.hide.statusbar.filter((t): t is string => typeof t === "string"));
+  }
+
+  // The enabled plugin (if any) known to rearrange the ribbon DOM itself. Reads the same
+  // private surface as cmdrAccess (app.plugins.plugins holds only enabled instances); an
+  // unreadable shape counts as "no conflict" — the burst breaker still covers a real fight.
+  // Public for the settings UI, which surfaces the standdown as a note on the Ribbon tab.
+  ribbonArrangerConflict(): { id: string; name: string } | null {
+    const instances = (this.app as unknown as { plugins?: { plugins?: Record<string, unknown> } }).plugins?.plugins;
+    if (instances === undefined) return null;
+    for (const known of RIBBON_ARRANGER_PLUGINS) {
+      const instance = instances[known.id];
+      if (instance !== undefined && instance !== null) return known;
+    }
+    return null;
   }
 
   // The settings UI's view of the live ribbon; null when the private internals changed shape.
@@ -665,6 +694,26 @@ export default class RibbonOrganizerPlugin extends Plugin {
       new Notice("Ribbon and Status Bar Organizer: ribbon grouping doesn't work on this Obsidian version — the ribbon is left untouched. Check for a plugin update.");
       return;
     }
+    const conflict = this.ribbonArrangerConflict();
+    if (conflict !== null) {
+      this.ribbonObserver?.disconnect();
+      if (!this.conflictStoodDown) {
+        this.conflictStoodDown = true;
+        this.restoreRibbon(internals);
+        console.error(`Ribbon Organizer: ribbon grouping is standing down while "${conflict.id}" is enabled; both plugins rearrange the same ribbon and would re-trigger each other`);
+        if (!this.conflictNoticeShown) {
+          this.conflictNoticeShown = true;
+          new Notice(`Ribbon and Status Bar Organizer: ribbon grouping is paused. ${conflict.name} is also arranging the ribbon, and running both can freeze Obsidian. Disable one of the two; grouping resumes by itself once ${conflict.name} is off.`);
+        }
+      }
+      // Keep watching (the restore above ran while the observer was disconnected, so it cannot
+      // self-trigger): the ribbon churns when the arranger is disabled, and grouping resumes
+      // on that signal. The arranger's own passes land here too, but this branch is read-only
+      // after the first standdown, so nothing feeds back into its watcher.
+      this.observeRibbon(internals.ribbonItemsEl);
+      return;
+    }
+    this.conflictStoodDown = false;
     // Disconnect while we write so our own DOM edits cannot re-trigger the observer.
     this.ribbonObserver?.disconnect();
     const cmdrHidden = this.cmdrHiddenTitles();
@@ -870,9 +919,38 @@ export default class RibbonOrganizerPlugin extends Plugin {
   // writes, so our own edits never loop. Reconnected after every apply; disconnected on unload.
   private observeRibbon(ribbonItemsEl: HTMLElement): void {
     if (this.ribbonObserver === null) {
-      this.ribbonObserver = new MutationObserver(() => this.applyGrouping());
+      this.ribbonObserver = new MutationObserver(() => {
+        // Burst breaker: an unknown plugin rearranging the ribbon in reaction to our passes
+        // makes this callback fire hundreds of times per second — synchronously, before any
+        // paint — which freezes the app. Counting only observer triggers (our own writes run
+        // with the observer disconnected) makes the count a pure measure of foreign churn,
+        // and counting only while grouping is actually applying (not during a conflict
+        // standdown, where this plugin is read-only and cannot be part of any loop) keeps a
+        // busy arranger from tripping a fuse that protects nothing.
+        if (!this.conflictStoodDown) {
+          const burst = pushReapplySample(this.reapplySamples, Date.now(), REAPPLY_BURST_WINDOW_MS, REAPPLY_BURST_LIMIT);
+          this.reapplySamples = burst.samples;
+          if (burst.tripped) {
+            this.tripGroupingBreaker();
+            return;
+          }
+        }
+        this.applyGrouping();
+      });
     }
     this.ribbonObserver.observe(ribbonItemsEl, { childList: true, subtree: true, attributes: true, attributeFilter: ["class"] });
+  }
+
+  // The last-resort fuse behind the known-arranger standdown: grouping latches off for the
+  // session (same latch as the internals-shape mismatch) and the ribbon is handed back in its
+  // stock state, so a ribbon fight degrades to "grouping off" instead of a frozen app.
+  private tripGroupingBreaker(): void {
+    this.groupingDisabled = true;
+    this.ribbonObserver?.disconnect();
+    const internals = ribbonInternals(this.app);
+    if (internals !== null) this.restoreRibbon(internals);
+    console.error(`Ribbon Organizer: ribbon grouping disabled for this session; more than ${REAPPLY_BURST_LIMIT} foreign ribbon changes within ${REAPPLY_BURST_WINDOW_MS}ms means another plugin is rearranging the ribbon in a loop with this one`);
+    new Notice("Ribbon and Status Bar Organizer: ribbon grouping turned itself off because another plugin kept rearranging the ribbon at the same time. Disable that plugin, then turn Ribbon and Status Bar Organizer off and back on.");
   }
 
   // Rebuilds this plugin's composite ribbon icons from settings: every previously registered

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.19.0
+
+- Added a standdown for conflicting ribbon plugins (#1): while a plugin known to rearrange the ribbon itself (Open Ribbon Groups) is enabled, grouping pauses instead of fighting it, a fight that could freeze Obsidian outright. The ribbon stays as that plugin arranges it, a notice and a Ribbon-tab note explain the pause, and grouping resumes on its own the moment that plugin is off; quick menus and the status bar tools are unaffected
+- Added a burst breaker behind that standdown, for ribbon-arranging plugins not known by name: if the ribbon keeps churning in a tight loop, grouping turns itself off for the session with a notice instead of freezing the app
+
 ## 0.18.2
 
 - Added a "Tablet style" dropdown under the mobile status bar toggle: keep the floating pill, or dock the bar flush in the bottom-right corner like the desktop status bar. Tablets only; phones keep the pill above the toolbar

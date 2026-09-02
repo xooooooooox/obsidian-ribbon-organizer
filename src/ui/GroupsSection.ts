@@ -52,6 +52,16 @@ export class GroupsSection {
       text: "Drag the left ribbon icons into groups; a divider separates each group. The eye hides an icon everywhere — Commander included. On phones and tablets the same groups shape the ribbon menu.",
     });
 
+    // Standdown note: shown only while a known ribbon-arranging plugin is enabled — the
+    // moment the standdown Notice points here — and absent noise the rest of the time.
+    const arranger = this.plugin.ribbonArrangerConflict();
+    if (arranger !== null) {
+      containerEl.createDiv({
+        cls: "ribbon-organizer-rg-note",
+        text: `Ribbon grouping is paused: ${arranger.name} is also arranging the ribbon, and running both can freeze Obsidian. Disable one of the two; grouping resumes by itself once ${arranger.name} is off. Changes made below still save and apply then.`,
+      });
+    }
+
     const snapshot = this.plugin.ribbonSnapshot();
     if (snapshot === null) {
       containerEl.createDiv({ cls: "ribbon-organizer-rg-note", text: "Ribbon grouping doesn't work on this Obsidian version — the ribbon is left untouched. Check for a plugin update." });

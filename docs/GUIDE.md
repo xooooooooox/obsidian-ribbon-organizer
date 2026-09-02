@@ -8,6 +8,10 @@ On the ribbon itself, a thin divider line renders between adjacent non-empty gro
 
 Mark any Ungrouped icon to tuck it: it moves off the ribbon into one ⋯ button (icon customizable), and clicking the button reaches the tucked icons.
 
+#### Conflicting ribbon plugins
+
+Some plugins rearrange the ribbon themselves (Open Ribbon Groups, for example). Running one of them together with grouping makes the two fight over the ribbon, which can freeze Obsidian. Grouping therefore pauses itself while such a plugin is enabled — the ribbon stays as that plugin arranges it, and everything else (quick menus, the status bar tools, editing your groups in settings) keeps working. Disable the other plugin and grouping resumes on its own. Against ribbon-rearranging plugins it doesn't recognize by name, grouping watches the ribbon instead: if it starts churning, grouping turns itself off for the session and tells you.
+
 ## Hiding
 
 The eye toggle on any row hides or shows that icon everywhere. Hiding writes Obsidian's native hide and Commander's hide list together (when Commander is installed); showing clears both. Commander matches icons by title, so two same-titled icons share the hide. Renaming a hidden icon makes it visible again and leaves a stale Commander entry behind. On phones, hidden icons also disappear from the navbar ribbon menu — including icons hidden only in Commander, which Obsidian's own menu would still show.
